@@ -638,7 +638,7 @@ export async function POST(req: NextRequest) {
 
       geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-      const geminiModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash'];
+      const geminiModels = ['gemini-3.6-flash', 'gemini-flash-latest'];
       for (const model of geminiModels) {
         try {
           const response = await fetch(
@@ -646,12 +646,15 @@ export async function POST(req: NextRequest) {
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(6000), // Max 6s wait per model
+              signal: AbortSignal.timeout(15000), // Max 15s wait per model
               body: JSON.stringify({
                 contents: geminiContents,
                 generationConfig: {
                   temperature: 0.3,
                   maxOutputTokens: 4096,
+                  thinkingConfig: {
+                    thinkingBudget: 0,
+                  },
                 },
               }),
             }
