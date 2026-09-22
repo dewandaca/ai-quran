@@ -177,14 +177,14 @@ export default function LandingHero() {
                 href="/app"
                 className="p-4 rounded-2xl bg-[#FAF6EE] hover:bg-[#F3EBDD] border border-[#E8DECD] transition group"
               >
-                <div className="w-10 h-10 rounded-xl bg-[#18181b] text-[#C5A059] flex items-center justify-center mb-2.5 border border-[#C5A059]/40">
-                  <Disc size={20} />
+                <div className="w-10 h-10 rounded-xl bg-[#1B4931] text-[#C5A059] flex items-center justify-center mb-2.5">
+                  <Volume2 size={20} />
                 </div>
                 <h4 className="text-sm font-bold text-[#1B4931] group-hover:text-[#143828]">
-                  Floating Vinyl Player
+                  6 Qari Ternama
                 </h4>
                 <p className="text-xs text-[#6B6258] mt-1">
-                  Audio murottal 6 Qari dengan piringan berputar.
+                  Audio murottal merdu per ayat &amp; surah lengkap.
                 </p>
               </Link>
             </div>
@@ -210,12 +210,11 @@ export default function LandingHero() {
                 <BookOpen size={24} />
               </div>
               <h3 className="text-lg font-bold text-[#1B4931] mb-2">
-                Tipografi Nyaman di Mata
+                Lengkap dengan Tafsir &amp; Doa
               </h3>
               <p className="text-xs sm:text-sm text-[#6B6258] leading-relaxed">
-                Menggunakan palet warna Warm Cream Aesthetic (`#FAF6EE`) dan font
-                khusus mushaf Amiri yang didesain agar mata tidak lelah saat
-                tilawah dalam durasi lama.
+                Tersedia penjelasan tafsir tahlili &amp; ringkas resmi Kemenag RI di setiap ayat,
+                serta ratusan kumpulan doa harian mustajab dari Al-Qur&apos;an dan As-Sunnah beserta artinya.
               </p>
             </div>
 
@@ -249,20 +248,148 @@ export default function LandingHero() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 px-4 sm:px-8 text-center text-xs text-[#6B6258] border-t border-[#E8DECD]">
-        <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
-          <div className="flex items-center gap-2 font-bold text-sm text-[#1B4931]">
-            <BookOpen size={16} />
-            <span>Al-Qur&apos;an Companion</span>
+      {/* Professional Footer */}
+      <footer className="bg-[#FAF6EE] border-t border-[#E8DECD] text-[#6B6258] pt-16 pb-12 px-4 sm:px-8">
+        <div className="max-w-6xl mx-auto">
+          {/* Top 4-Column Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-[#E8DECD]">
+            {/* Column 1: Brand & Overview */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#1B4931] text-[#C5A059] flex items-center justify-center font-bold shadow-md border border-[#C5A059]/40">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <span className="font-bold text-base tracking-tight text-[#1B4931] block">
+                    Al-Qur&apos;an Companion
+                  </span>
+                  <span className="text-[10px] text-[#C5A059] font-bold uppercase tracking-wider">
+                    Mushaf &amp; Asisten Syariah
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-[#6B6258] leading-relaxed">
+                Aplikasi Al-Qur&apos;an digital modern berstandar Kemenag RI yang memadukan keindahan tilawah, audio murottal 6 Qari, jadwal sholat presisi, dan asisten AI syariah berbasis RAG.
+              </p>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1B4931]/10 text-[#1B4931] text-[11px] font-semibold">
+                <ShieldCheck size={14} className="text-[#1B4931]" />
+                <span>Data Shahih &amp; Terverifikasi</span>
+              </div>
+            </div>
+
+            {/* Column 2: Navigasi Fitur */}
+            <div>
+              <h4 className="text-xs font-bold text-[#1B4931] mb-4 uppercase tracking-wider">
+                Navigasi Utama
+              </h4>
+              <ul className="space-y-2.5 text-xs">
+                <li>
+                  <Link href="/app/quran" className="hover:text-[#1B4931] hover:underline flex items-center gap-1.5 transition-colors">
+                    <BookOpen size={13} className="text-[#C5A059]" />
+                    <span>Daftar 114 Surah &amp; 30 Juz</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/app/shalat" className="hover:text-[#1B4931] hover:underline flex items-center gap-1.5 transition-colors">
+                    <Clock size={13} className="text-[#C5A059]" />
+                    <span>Jadwal Sholat &amp; Imsakiyah</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/app/ai-chat" className="hover:text-[#1B4931] hover:underline flex items-center gap-1.5 transition-colors">
+                    <Sparkles size={13} className="text-[#C5A059]" />
+                    <span>Tanya AI Ustadz (RAG)</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/app/bookmarks" className="hover:text-[#1B4931] hover:underline flex items-center gap-1.5 transition-colors">
+                    <Bookmark size={13} className="text-[#C5A059]" />
+                    <span>Penanda &amp; Terakhir Dibaca</span>
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3: Fitur Unggulan */}
+            <div>
+              <h4 className="text-xs font-bold text-[#1B4931] mb-4 uppercase tracking-wider">
+                Layanan &amp; Fitur
+              </h4>
+              <ul className="space-y-2.5 text-xs">
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+                  <span>Tafsir Lengkap Kemenag RI</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+                  <span>Murottal Audio 6 Qari Dunia</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+                  <span>Kumpulan Doa Harian Pilihan</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+                  <span>Ayat Inspirasi Berganti Harian</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+                  <span>Deteksi Lokasi GPS Otomatis</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 4: Sumber Data & Kemitraan */}
+            <div>
+              <h4 className="text-xs font-bold text-[#1B4931] mb-4 uppercase tracking-wider">
+                Sumber &amp; Standar Data
+              </h4>
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-2xl bg-[#F3EBDD]/60 border border-[#E8DECD]">
+                  <p className="font-bold text-[#1B4931]">Kemenag RI &amp; EQuran.id</p>
+                  <p className="text-[11px] text-[#6B6258] mt-0.5 leading-relaxed">
+                    Mushaf standar Indonesia, terjemahan resmi, serta audio qari bersumber dari repositori terverifikasi.
+                  </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-[#F3EBDD]/60 border border-[#E8DECD]">
+                  <p className="font-bold text-[#1B4931]">Pencarian Vektor Syariah</p>
+                  <p className="text-[11px] text-[#6B6258] mt-0.5 leading-relaxed">
+                    Setiap jawaban AI diverifikasi dengan pencocokan ayat Al-Qur&apos;an secara shahih.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="max-w-md">
-            Aplikasi Al-Qur&apos;an digital ramah mobile, bersumber dari data Kemenag RI
-            dan EQuran.id. Semoga menjadi amal jariyah bagi kita semua.
-          </p>
-          <div className="flex items-center gap-1 text-[#9C9286]">
-            <span>Dibuat dengan ikhlas untuk kemudahan tilawah umat</span>
-            <Heart size={13} className="text-rose-600 fill-rose-600" />
+
+          {/* Middle Quote / Hadith Banner */}
+          <div className="py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left border-b border-[#E8DECD]">
+            <div>
+              <p className="font-arabic text-lg text-[#1B4931]">
+                خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ
+              </p>
+              <p className="text-xs italic text-[#6B6258] mt-1">
+                &ldquo;Sebaik-baik kalian adalah orang yang mempelajari Al-Qur&apos;an dan mengajarkannya.&rdquo; (HR. Bukhari)
+              </p>
+            </div>
+            <Link
+              href="/app"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1B4931] hover:bg-[#143828] text-white text-xs font-bold shadow-sm transition shrink-0"
+            >
+              <span>Mulai Membaca</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Bottom Sub-footer */}
+          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#9C9286]">
+            <div className="flex items-center gap-1 text-center sm:text-left">
+              <span>&copy; {new Date().getFullYear()} Al-Qur&apos;an Companion. Dibuat dengan ikhlas untuk kemudahan tilawah umat.</span>
+            </div>
+            <div className="flex items-center gap-4 text-[11px]">
+              <span className="text-[#6B6258]">Versi 1.0.0</span>
+              <span>•</span>
+              <span className="text-[#6B6258]">Mobile-First PWA</span>
+            </div>
           </div>
         </div>
       </footer>
