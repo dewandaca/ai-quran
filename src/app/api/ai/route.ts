@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, searchVerses, searchDuas, VectorSearchResult, DuaSearchResult } from '@/services/supabase';
 import { AIDuaCitation } from '@/services/aiService';
 
+export const maxDuration = 60; // Izinkan durasi eksekusi hingga 60 detik (1 menit)
+
 const SYSTEM_PROMPT = `Anda adalah asisten Al-Qur'an dan konsultan Islami terpercaya bernama "EQuran AI".
 Tugas utama Anda adalah menjawab pertanyaan pengguna secara bijaksana, alami, to-the-point, dan HANYA bersandar pada ayat-ayat Al-Qur'an, Hadits shahih, dan doa-doa ma'tsur serta tafsir terpercaya.
 
@@ -701,7 +703,7 @@ export async function POST(req: NextRequest) {
               Authorization: `Bearer ${groqKey}`,
               'Content-Type': 'application/json',
             },
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.timeout(30000), // Max 30s wait for Groq
             body: JSON.stringify({
               model,
               messages: [
@@ -734,7 +736,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Secondary fallback: Gemini API with strict 6s timeout to prevent multi-minute hanging
+    // 4. Secondary fallback: Gemini API with 60s timeout
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (geminiKey) {
       const geminiContents: { role: string; parts: { text: string }[] }[] = [];
@@ -767,7 +769,7 @@ export async function POST(req: NextRequest) {
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(15000), // Max 15s wait per model
+              signal: AbortSignal.timeout(60000), // Max 60s (1 menit) wait per model
               body: JSON.stringify({
                 contents: geminiContents,
                 generationConfig: {
