@@ -17,7 +17,18 @@ PEDOMAN UTAMA:
 - Al-Qur'an adalah firman Allah yang suci, tidak boleh ada satu huruf pun yang salah, tertukar, atau dikurangi.
 - DILARANG KERAS mengarang, mengubah awalan huruf, atau menuliskan teks Arab dan transliterasi Latin dari hafalan sendiri yang rentan salah/halusinasi.
 - Jika ayat atau doa terdapat dalam referensi [REFERENSI AYAT AL-QUR'AN], Anda WAJIB MENYALIN 100% PERSIS teks Arab, transliterasi Latin, dan terjemahan langsung dari referensi tersebut. Jangan ubah huruf, harakat, maupun artinya!
-- JANGAN PERNAH menukar ayat Al-Qur'an dengan doa makan atau doa harian lainnya. Teks ayat Al-Qur'an hanya untuk dalil firman Allah yang bersangkutan.`;
+- JANGAN PERNAH menukar ayat Al-Qur'an dengan doa makan atau doa harian lainnya. Teks ayat Al-Qur'an hanya untuk dalil firman Allah yang bersangkutan.
+9. KELENGKAPAN & KEBENARAN FAKTA AL-QUR'AN (ANTI-ASUMSI & ANTI-PEMOTONGAN):
+- Bila pengguna menanyakan daftar surat atau ayat dengan kriteria tertentu (misalnya: "Alif Lam Mim ada di surat apa saja?"), Anda WAJIB memberikan jawaban yang LENGKAP dan AKURAT sesuai fakta mushaf Al-Qur'an, JANGAN PERNAH berasumsi atau memotong jumlahnya.
+Contoh: Alif Lam Mim murni (الۤمّۤ) terdapat tepat di awal 6 surah:
+  1. QS. Al-Baqarah (2:1)
+  2. QS. Ali 'Imran (3:1)
+  3. QS. Al-'Ankabut (29:1)
+  4. QS. Ar-Rum (30:1)
+  5. QS. Luqman (31:1)
+  6. QS. As-Sajdah (32:1)
+  (Dan jelaskan bahwa ada pula kombinasi dengan tambahan huruf: Alif Lam Mim Shad pada QS. Al-A'raf: 1, dan Alif Lam Mim Ra pada QS. Ar-Ra'd: 1).
+- DILARANG KERAS mengatakan "hanya ada tiga buah" atau mengarang surat lain yang tidak memiliki ayat tersebut (seperti QS. Al-An'am yang tidak diawali Alif Lam Mim).`;
 
 export interface AICitation {
   surahNumber: number;
@@ -422,7 +433,7 @@ async function extractCitationsWithSupabase(results: VectorSearchResult[], text:
   }
 
   if (citations.length === 0 && results.length > 0) {
-    return results.slice(0, 3).map((r) => ({
+    return results.slice(0, 6).map((r) => ({
       surahNumber: r.surah_number,
       ayahNumber: r.ayah_number,
       surahName: r.surah_name,
@@ -431,7 +442,7 @@ async function extractCitationsWithSupabase(results: VectorSearchResult[], text:
     }));
   }
 
-  return citations.slice(0, 4);
+  return citations.slice(0, 8);
 }
 
 function extractDuaCitations(duaResults: DuaSearchResult[]): AIDuaCitation[] {
@@ -497,8 +508,8 @@ export async function POST(req: NextRequest) {
 
     if (embedding.length > 0) {
       const [vRes, dRes] = await Promise.all([
-        searchVerses(embedding, 0.55, 3),
-        searchDuas(embedding, 0.50, 3),
+        searchVerses(embedding, 0.45, 8),
+        searchDuas(embedding, 0.45, 5),
       ]);
       verseResults = vRes;
       duaResults = dRes;
@@ -533,29 +544,111 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2b. Keyword search enhancement to guarantee high-relevance verses from Supabase (e.g. zina, riba, sabar)
-    const keywords = message.toLowerCase().match(/\b(zina|riba|sedekah|infaq|puasa|ramadhan|sabar|syirik|kematian|maut|neraka|surga|haji|umrah|zakat|judi|maysir|khamr|arak|orang tua|birrul walidain|anak yatim|sholat|shalat|wudhu|thaharah|taubat|hijab|jilbab|aurat|riya|hasad|dengki|ghibah|fitnah|jodoh|rezeki|tawakal|syukur|isra)\b/gi);
-    if (keywords && keywords.length > 0 && supabase) {
-      try {
-        const kw = keywords[0].toLowerCase();
-        const { data: kwMatches } = await supabase
-          .from('verses')
-          .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
-          .ilike('translation', `%${kw}%`)
-          .limit(3);
+    // 2b. Fawatihussuwar (Huruf Muqatta'ah) & Direct Group Retrieval from Supabase
+    const msgLower = message.toLowerCase();
+    const isAlifLamMim = /\b(?:alif\s*l[aā]m\s*m[iī]m|alif\s*lam\s*mim)\b/i.test(msgLower) || /الۤ?مّ?ۤ?/.test(message);
+    const isAlifLamRa = /\b(?:alif\s*l[aā]m\s*r[aā]|alif\s*lam\s*ra)\b/i.test(msgLower) || /الۤ?رٰ?/.test(message);
+    const isHaMim = /\b(?:h[aā]\s*m[iī]m|ha\s*mim)\b/i.test(msgLower) || /حٰ?مٓ?/.test(message);
 
-        if (kwMatches && kwMatches.length > 0) {
-          for (const km of kwMatches) {
-            if (!verseResults.some(v => v.surah_number === km.surah_number && v.ayah_number === km.ayah_number)) {
-              verseResults.unshift({
-                ...km,
-                similarity: 0.95,
-              });
+    if (supabase) {
+      if (isAlifLamMim) {
+        try {
+          const { data: almMatches } = await supabase
+            .from('verses')
+            .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
+            .or('translation.ilike.%alif lām mīm%,translation.ilike.%alif lam mim%,arabic_text.ilike.%الۤمّۤ%')
+            .order('surah_number', { ascending: true });
+
+          if (almMatches && almMatches.length > 0) {
+            for (const am of almMatches) {
+              if (!verseResults.some(v => v.surah_number === am.surah_number && v.ayah_number === am.ayah_number)) {
+                verseResults.push({
+                  ...am,
+                  similarity: 0.99,
+                });
+              }
             }
           }
+        } catch (almErr) {
+          console.warn('Alif Lam Mim search error:', almErr);
         }
-      } catch (kwErr) {
-        console.warn('Keyword verse enhancement error:', kwErr);
+      } else if (isAlifLamRa) {
+        try {
+          const { data: alrMatches } = await supabase
+            .from('verses')
+            .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
+            .or('translation.ilike.%alif lām rā%,translation.ilike.%alif lam ra%,arabic_text.ilike.%الۤرٰ%')
+            .order('surah_number', { ascending: true });
+
+          if (alrMatches && alrMatches.length > 0) {
+            for (const am of alrMatches) {
+              if (!verseResults.some(v => v.surah_number === am.surah_number && v.ayah_number === am.ayah_number)) {
+                verseResults.push({
+                  ...am,
+                  similarity: 0.99,
+                });
+              }
+            }
+          }
+        } catch (alrErr) {
+          console.warn('Alif Lam Ra search error:', alrErr);
+        }
+      } else if (isHaMim) {
+        try {
+          const { data: hmMatches } = await supabase
+            .from('verses')
+            .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
+            .or('translation.ilike.%ḥā mīm%,translation.ilike.%ha mim%,arabic_text.ilike.%حٰمٓ%')
+            .order('surah_number', { ascending: true });
+
+          if (hmMatches && hmMatches.length > 0) {
+            for (const hm of hmMatches) {
+              if (!verseResults.some(v => v.surah_number === hm.surah_number && v.ayah_number === hm.ayah_number)) {
+                verseResults.push({
+                  ...hm,
+                  similarity: 0.99,
+                });
+              }
+            }
+          }
+        } catch (hmErr) {
+          console.warn('Ha Mim search error:', hmErr);
+        }
+      }
+
+      // 2c. Dynamic keyword search enhancement across all verses in Supabase
+      const cleanWords = msgLower.replace(/[^\w\s]/g, ' ').split(/\s+/);
+      const stopWords = new Set([
+        'apa', 'aja', 'saja', 'ada', 'di', 'surat', 'surah', 'ayat', 'ke', 'nomor', 'yang', 'ini', 'itu',
+        'dan', 'atau', 'dari', 'pada', 'untuk', 'dengan', 'adalah', 'yaitu', 'bagaimana', 'kenapa',
+        'mengapa', 'siapa', 'dimana', 'kapan', 'tanya', 'tolong', 'sebutkan', 'jelaskan', 'menurut',
+        'quran', 'al-quran', 'alquran', 'bisa', 'dong', 'ya', 'kan', 'tuh', 'terkadang', 'dalam', 'tentang'
+      ]);
+      const meaningfulKeywords = cleanWords.filter(w => w.length >= 3 && !stopWords.has(w)).slice(0, 3);
+
+      if (meaningfulKeywords.length > 0) {
+        for (const kw of meaningfulKeywords) {
+          try {
+            const { data: kwMatches } = await supabase
+              .from('verses')
+              .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
+              .or(`translation.ilike.%${kw}%,tafsir_text.ilike.%${kw}%`)
+              .limit(5);
+
+            if (kwMatches && kwMatches.length > 0) {
+              for (const km of kwMatches) {
+                if (!verseResults.some(v => v.surah_number === km.surah_number && v.ayah_number === km.ayah_number)) {
+                  verseResults.push({
+                    ...km,
+                    similarity: 0.90,
+                  });
+                }
+              }
+            }
+          } catch (kwErr) {
+            console.warn(`Keyword search error for "${kw}":`, kwErr);
+          }
+        }
       }
     }
 

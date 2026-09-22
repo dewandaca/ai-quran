@@ -25,9 +25,20 @@ function isArabicLine(str: string): boolean {
 }
 
 function renderFormattedInline(text: string): React.ReactNode {
+  // Clean dangling unbalanced asterisks at end of line (e.g. "..., yaitu:**")
+  let normalized = text;
+  const count = (normalized.match(/\*\*/g) || []).length;
+  if (count % 2 !== 0) {
+    if (normalized.endsWith('**')) {
+      normalized = normalized.slice(0, -2).trim();
+    } else {
+      normalized = normalized + '**';
+    }
+  }
+
   const parts: React.ReactNode[] = [];
   const regex = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
-  const segments = text.split(regex);
+  const segments = normalized.split(regex);
 
   segments.forEach((seg, i) => {
     if (!seg) return;
@@ -109,7 +120,65 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // 2. Blockquotes: lines starting with '>'
+    // 2. Markdown Tables: lines starting and containing '|'
+    if (trimmed.startsWith('|') && trimmed.includes('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      i--; // step back since loop counter increments
+
+      if (tableLines.length >= 2) {
+        const parseRow = (rowStr: string) => {
+          return rowStr
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map((c) => c.trim());
+        };
+
+        const headers = parseRow(tableLines[0]);
+        const isDelimiter = /^\|[\s-:]+(\|[\s-:]+)+\|?$/.test(tableLines[1]);
+        const dataRows = (isDelimiter ? tableLines.slice(2) : tableLines.slice(1)).map(parseRow);
+
+        elements.push(
+          <div key={`table-${i}`} className="my-3 overflow-x-auto rounded-2xl border border-[#E8DECD] bg-white shadow-xs">
+            <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[340px]">
+              <thead>
+                <tr className="bg-[#FAF6EE] border-b border-[#E8DECD]">
+                  {headers.map((h, hIdx) => (
+                    <th key={hIdx} className="px-3.5 py-2.5 font-bold text-[#1B4931] whitespace-nowrap">
+                      {renderFormattedInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E8DECD]/60">
+                {dataRows.map((row, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-[#FAF6EE]/50 transition-colors even:bg-[#FAF6EE]/20">
+                    {row.map((cell, cIdx) => (
+                      <td key={cIdx} className="px-3.5 py-2.5 text-[#2C2621]">
+                        {isArabicLine(cell) ? (
+                          <span dir="rtl" className="font-arabic text-base sm:text-lg text-right block">
+                            {cell}
+                          </span>
+                        ) : (
+                          renderFormattedInline(cell)
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+    }
+
+    // 3. Blockquotes: lines starting with '>'
     if (trimmed.startsWith('>')) {
       const quoteLines: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith('>')) {
