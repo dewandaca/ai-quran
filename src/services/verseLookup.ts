@@ -22,25 +22,56 @@ export interface QuranCitationRef {
 const verseCache = new Map<string, CitedVerseData>();
 
 /**
+ * Cleans up OCR / legacy typesetting artifacts from Kemenag Tafsir texts:
+ * - Broken bar '¦' (U+00A6) was used as quotation marks for Quran verses
+ * - Pipes '|' (U+007C)
+ * - Corrupted Word bullets like 'ï‚§' or section signs '§'
+ * - Non-breaking spaces and irregular whitespace
+ */
+export function sanitizeTafsirText(text: string): string {
+  if (!text) return '';
+  return text
+    // Replace corrupted Word bullets like ï‚§ or section signs with bullet dot
+    .replace(/(?:ï‚§|[\u00EF\u201A\u00A7]|\u00A7)/g, '• ')
+    // Replace broken bar ¦ (U+00A6) used as quote delimiters in Kemenag typesetting
+    .replace(/¦\.\s*/g, '“')
+    .replace(/¦\s*\(/g, '” (')
+    .replace(/¦\s*/g, '“')
+    .replace(/\s*¦/g, '”')
+    .replace(/¦/g, '')
+    // Replace rogue vertical pipes that are not markdown dividers
+    .replace(/(?<!-)\|(?!-)/g, '')
+    // Normalize non-breaking spaces
+    .replace(/\u00A0/g, ' ')
+    .trim();
+}
+
+/**
  * Parses Quran references from tafsir or any text.
- * Matches patterns like:
+ * Robustly matches:
  * - (al-An'am/6: 110)
  * - (al-hajj/22: 46)
+ * - (al-Ma'idah/5:13. Lihat juga an-Nisa'/4:46)
  * - (asy-Syu‘ara‘/26: 192-193)
- * - (Ali 'Imran/3:130)
  * - (QS. Al-Baqarah/2: 255)
  */
 export function extractQuranCitations(text: string): QuranCitationRef[] {
   const citations: QuranCitationRef[] = [];
   const seen = new Set<string>();
 
-  // Pattern: (OptionalName / SurahNum : AyahNum [- EndAyahNum]?)
-  const regex = /\((?:([a-zA-Z\s‘'’\-]+)\/)?(\d{1,3}):\s*(\d{1,3})(?:-(\d{1,3}))?\)/g;
+  // Matches any 'surah_name_hint / surah_num : ayah_num [- end_ayah_num]?'
+  const regex = /([a-zA-Z\s\u2018\'\u2019\-]+)\/(\d{1,3}):\s*(\d{1,3})(?:-(\d{1,3}))?/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    const rawMatch = match[0];
-    const surahNameHint = match[1]?.trim();
+    let surahNameHint = match[1].trim();
+
+    // Strip common leading words like 'lihat juga', 'dan', 'pada', 'surat', 'surah', 'QS.'
+    surahNameHint = surahNameHint
+      .replace(/^(?:lihat\s+juga|lihat\s+pula|dan\s+juga|dan|pada|surah|surat|qs\.?)\s+/i, '')
+      .replace(/^[\(\[\{]/, '')
+      .trim();
+
     const surahNumber = parseInt(match[2], 10);
     const ayahStart = parseInt(match[3], 10);
     const ayahEnd = match[4] ? parseInt(match[4], 10) : undefined;
@@ -51,11 +82,11 @@ export function extractQuranCitations(text: string): QuranCitationRef[] {
       if (!seen.has(key)) {
         seen.add(key);
         citations.push({
-          rawMatch,
+          rawMatch: match[0],
           surahNumber,
           ayahStart,
           ayahEnd,
-          surahNameHint,
+          surahNameHint: surahNameHint || undefined,
         });
       }
     }
@@ -73,10 +104,6 @@ export async function fetchCitedVerse(
   ayahNumber: number,
   ayahEnd?: number
 ): Promise<CitedVerseData[]> {
-  const cacheKey = `${surahNumber}:${ayahNumber}${ayahEnd ? `-${ayahEnd}` : ''}`;
-  const results: CitedVerseData[] = [];
-
-  // Determine ayah numbers to retrieve (limit range to 4 consecutive verses max)
   const targetAyahs: number[] = [];
   const maxEnd = ayahEnd && ayahEnd > ayahNumber ? Math.min(ayahEnd, ayahNumber + 3) : ayahNumber;
   for (let a = ayahNumber; a <= maxEnd; a++) {
@@ -148,5 +175,5 @@ export async function fetchCitedVerse(
     console.error('Failed to fetch fallback verse detail:', apiErr);
   }
 
-  return results;
+  return [];
 }

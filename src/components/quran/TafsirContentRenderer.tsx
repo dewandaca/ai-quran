@@ -3,7 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { BookOpen, BookMarked, ArrowRight, Loader2 } from 'lucide-react';
-import { extractQuranCitations, fetchCitedVerse, CitedVerseData, QuranCitationRef } from '@/services/verseLookup';
+import {
+  extractQuranCitations,
+  fetchCitedVerse,
+  sanitizeTafsirText,
+  CitedVerseData,
+  QuranCitationRef,
+} from '@/services/verseLookup';
 
 interface TafsirContentRendererProps {
   teks: string;
@@ -17,8 +23,11 @@ export default function TafsirContentRenderer({
   const [resolvedVerses, setResolvedVerses] = useState<Record<string, CitedVerseData[]>>({});
   const [loadingCitations, setLoadingCitations] = useState<Record<string, boolean>>({});
 
-  // 1. Extract all citations from the entire tafsir text
-  const allCitations = useMemo(() => extractQuranCitations(teks), [teks]);
+  // 0. Clean legacy OCR / typesetting artifacts (like broken bar ¦ or corrupted bullets)
+  const cleanTeks = useMemo(() => sanitizeTafsirText(teks), [teks]);
+
+  // 1. Extract all citations from the cleaned tafsir text
+  const allCitations = useMemo(() => extractQuranCitations(cleanTeks), [cleanTeks]);
 
   // 2. Fetch all cited Quran verses asynchronously
   useEffect(() => {
@@ -60,7 +69,7 @@ export default function TafsirContentRenderer({
   // 3. Process the tafsir text into structured blocks
   const blocks = useMemo(() => {
     // Normalise double newlines
-    const rawParagraphs = teks
+    const rawParagraphs = cleanTeks
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .filter(Boolean);

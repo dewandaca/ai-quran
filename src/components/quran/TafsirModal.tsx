@@ -16,6 +16,7 @@ import {
 import { TafsirAyah, Ayah } from '@/services/quranApi';
 import TafsirContentRenderer from './TafsirContentRenderer';
 import { useAudioStore } from '@/stores/useAudioStore';
+import { sanitizeTafsirText } from '@/services/verseLookup';
 
 export interface TafsirModalProps {
   visible: boolean;
@@ -94,14 +95,13 @@ export default function TafsirModal({
       queue
     );
   };
-
   const handleCopyTafsir = () => {
     const lines = [
       `Tafsir QS. ${surahName} : Ayat ${ayahNumber}`,
       currentAyah?.teksArab ? `\n${currentAyah.teksArab}\n` : '',
       currentAyah?.teksIndonesia ? `Artinya: "${currentAyah.teksIndonesia}"\n` : '',
       `--- Penjelasan Tafsir Kemenag RI ---`,
-      currentTafsir ? currentTafsir.teks : 'Tafsir belum tersedia.',
+      currentTafsir ? sanitizeTafsirText(currentTafsir.teks) : 'Tafsir belum tersedia.',
       `\nDibaca via EQuran AI Companion`,
     ].filter(Boolean);
 
