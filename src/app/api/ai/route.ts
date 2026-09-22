@@ -185,31 +185,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
         }
       }
     } catch (err) {
-      console.warn('Gemini embedding failed, trying fallback:', err);
-    }
-  }
-
-  // 2. Secondary fallback: OpenAI (text-embedding-3-small)
-  const openAiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-  if (openAiKey) {
-    try {
-      const res = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${openAiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          input: text.slice(0, 1000),
-          model: 'text-embedding-3-small',
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data?.[0]?.embedding || [];
-      }
-    } catch (err) {
-      console.error('OpenAI embedding error:', err);
+      console.warn('Gemini embedding failed:', err);
     }
   }
 
@@ -691,115 +667,80 @@ export async function POST(req: NextRequest) {
 
     const systemPromptWithContext = `${SYSTEM_PROMPT}\n\n${fullContext}`;
 
-    // 3. Try ultra-fast Groq API FIRST (Qwen 27B / GPT-OSS 120B respond in ~1.5s with excellent Arabic & Islamic grounding)
-    const groqKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
-    if (groqKey) {
-      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
-      for (const model of groqModels) {
-        try {
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${groqKey}`,
-              'Content-Type': 'application/json',
-            },
-            signal: AbortSignal.timeout(30000), // Max 30s wait for Groq
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: 'system', content: systemPromptWithContext },
-                ...conversationHistory.slice(-10),
-                { role: 'user', content: message },
-              ],
-              temperature: 0.3,
-              max_tokens: 3000,
-            }),
-          });
+    // Text Generation: Murni menggunakan Google Gemini (gemini-2.5-flash & gemini-3.6-flash)
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (!geminiKey) {
+      console.error('GEMINI_API_KEY belum disetel di environment.');
+      return NextResponse.json({
+        text: 'Maaf, konfigurasi GEMINI_API_KEY belum disetel di server.',
+        citations: [],
+        duaCitations: [],
+      });
+    }
 
-          if (response.ok) {
-            const json = await response.json();
-            const rawReply = json.choices?.[0]?.message?.content;
-            if (rawReply && rawReply.trim().length > 0) {
-              const cleaned = cleanAssistantReply(rawReply);
-              const grounded = await groundReply(cleaned, verseResults);
-              const citations = await extractCitationsWithSupabase(verseResults, grounded);
-              return NextResponse.json({
-                text: grounded,
-                citations,
-                duaCitations: extractDuaCitations(duaResults),
-              });
-            }
-          }
-        } catch (groqErr) {
-          console.warn(`Groq (${model}) error:`, groqErr);
-        }
+    const geminiContents: { role: string; parts: { text: string }[] }[] = [];
+
+    geminiContents.push({
+      role: 'user',
+      parts: [{ text: `${systemPromptWithContext}\n\nPahami instruksi di atas dan jawab pertanyaan pengguna berikut.` }],
+    });
+    geminiContents.push({
+      role: 'model',
+      parts: [{ text: 'Baik, saya siap menjawab pertanyaan seputar Al-Qur\'an, doa, dan Islam berdasarkan rujukan shahih.' }],
+    });
+
+    const historySlice = conversationHistory.slice(-10);
+    for (const msg of historySlice) {
+      if (msg.role === 'user') {
+        geminiContents.push({ role: 'user', parts: [{ text: msg.content }] });
+      } else if (msg.role === 'assistant') {
+        geminiContents.push({ role: 'model', parts: [{ text: msg.content }] });
       }
     }
 
-    // 4. Secondary fallback: Gemini API with 60s timeout
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    if (geminiKey) {
-      const geminiContents: { role: string; parts: { text: string }[] }[] = [];
+    geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-      geminiContents.push({
-        role: 'user',
-        parts: [{ text: `${systemPromptWithContext}\n\nPahami instruksi di atas dan jawab pertanyaan pengguna berikut.` }],
-      });
-      geminiContents.push({
-        role: 'model',
-        parts: [{ text: 'Baik, saya siap menjawab pertanyaan seputar Al-Qur\'an, doa, dan Islam berdasarkan rujukan shahih.' }],
-      });
-
-      const historySlice = conversationHistory.slice(-10);
-      for (const msg of historySlice) {
-        if (msg.role === 'user') {
-          geminiContents.push({ role: 'user', parts: [{ text: msg.content }] });
-        } else if (msg.role === 'assistant') {
-          geminiContents.push({ role: 'model', parts: [{ text: msg.content }] });
-        }
-      }
-
-      geminiContents.push({ role: 'user', parts: [{ text: message }] });
-
-      const geminiModels = ['gemini-3.6-flash', 'gemini-flash-latest'];
-      for (const model of geminiModels) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(60000), // Max 60s (1 menit) wait per model
-              body: JSON.stringify({
-                contents: geminiContents,
-                generationConfig: {
-                  temperature: 0.3,
-                  maxOutputTokens: 4096,
-                  thinkingConfig: {
-                    thinkingBudget: 0,
-                  },
+    const geminiModels = ['gemini-2.5-flash', 'gemini-3.6-flash'];
+    for (const model of geminiModels) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(60000), // Toleransi hingga 1 menit jika koneksi lag
+            body: JSON.stringify({
+              contents: geminiContents,
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 4096,
+                thinkingConfig: {
+                  thinkingBudget: 0,
                 },
-              }),
-            }
-          );
-
-          if (response.ok) {
-            const json = await response.json();
-            const rawReply = json.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rawReply && rawReply.trim().length > 0) {
-              const cleaned = cleanAssistantReply(rawReply);
-              const grounded = await groundReply(cleaned, verseResults);
-              const citations = await extractCitationsWithSupabase(verseResults, grounded);
-              return NextResponse.json({
-                text: grounded,
-                citations,
-                duaCitations: extractDuaCitations(duaResults),
-              });
-            }
+              },
+            }),
           }
-        } catch (geminiErr) {
-          console.warn(`Gemini (${model}) error or timeout:`, geminiErr);
+        );
+
+        if (response.ok) {
+          const json = await response.json();
+          const rawReply = json.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawReply && rawReply.trim().length > 0) {
+            const cleaned = cleanAssistantReply(rawReply);
+            const grounded = await groundReply(cleaned, verseResults);
+            const citations = await extractCitationsWithSupabase(verseResults, grounded);
+            return NextResponse.json({
+              text: grounded,
+              citations,
+              duaCitations: extractDuaCitations(duaResults),
+            });
+          }
+        } else {
+          const errText = await response.text();
+          console.error(`Gemini (${model}) HTTP ${response.status}:`, errText);
         }
+      } catch (geminiErr) {
+        console.error(`Gemini (${model}) error or timeout:`, geminiErr);
       }
     }
 
