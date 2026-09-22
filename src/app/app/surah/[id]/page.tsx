@@ -72,25 +72,86 @@ export default function SurahDetailPage({
     setSelectedQari,
   } = useAudioStore();
 
+  const [highlightedAyah, setHighlightedAyah] = useState<number | null>(null);
+
+  const getTargetAyahFromUrl = () => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const ayahParam = params.get('ayah');
+    if (ayahParam && !isNaN(parseInt(ayahParam, 10))) {
+      return parseInt(ayahParam, 10);
+    }
+    const hash = window.location.hash;
+    const match = hash.match(/ayah-(\d+)/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  };
+
+  const scrollToTargetAyah = (ayahNum: number) => {
+    let attempts = 0;
+    const maxAttempts = 25;
+
+    const checkAndScroll = () => {
+      const el = document.getElementById(`ayah-${ayahNum}`);
+      if (el) {
+        const headerOffset = 80;
+        const elementPosition = el.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth',
+        });
+
+        setHighlightedAyah(ayahNum);
+        setTimeout(() => {
+          setHighlightedAyah(null);
+        }, 4000);
+      } else if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(checkAndScroll, 80);
+      }
+    };
+
+    setTimeout(checkAndScroll, 120);
+  };
+
   useEffect(() => {
     loadData();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const target = getTargetAyahFromUrl();
+    if (!target) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [surahNumber]);
 
-  // Handle scroll to hash if present in URL
+  // Handle scroll to targeted ayah when surah finishes loading
   useEffect(() => {
     if (!loading && surah) {
-      const hash = window.location.hash;
-      if (hash) {
-        const el = document.querySelector(hash);
-        if (el) {
-          setTimeout(() => {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 350);
-        }
+      const target = getTargetAyahFromUrl();
+      if (target) {
+        scrollToTargetAyah(target);
       }
     }
   }, [loading, surah]);
+
+  // Handle subsequent in-page hash or URL changes
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const target = getTargetAyahFromUrl();
+      if (target) {
+        scrollToTargetAyah(target);
+      }
+    };
+
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
 
   // Track reading progress automatically as user scrolls
   useEffect(() => {
@@ -555,6 +616,7 @@ export default function SurahDetailPage({
                     totalAyahs={surah.jumlahAyat}
                     onOpenTafsir={handleOpenTafsir}
                     allAyahs={surah.ayat}
+                    isHighlighted={highlightedAyah === ayah.nomorAyat}
                   />
                 ))}
               </div>

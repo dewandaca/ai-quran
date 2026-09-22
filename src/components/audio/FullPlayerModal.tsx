@@ -213,7 +213,7 @@ export default function FullPlayerModal() {
 
           {/* Jump to surah page */}
           <Link
-            href={`/app/surah/${currentTrack.surahNumber}#ayah-${currentTrack.ayahNumber}`}
+            href={`/app/surah/${currentTrack.surahNumber}?ayah=${currentTrack.ayahNumber}#ayah-${currentTrack.ayahNumber}`}
             onClick={() => setPlayerModalOpen(false)}
             className="flex items-center gap-1 text-[#1B4931] font-semibold hover:underline"
           >

@@ -371,12 +371,12 @@ export default function DailyVerseCard() {
           QS. {verse.surahName} : {verse.ayahNumber}
         </span>
 
-        {/* Open Surah Link */}
+        {/* Open Verse Link */}
         <Link
-          href={`/app/surah/${verse.surahNumber}#ayah-${verse.ayahNumber}`}
+          href={`/app/surah/${verse.surahNumber}?ayah=${verse.ayahNumber}#ayah-${verse.ayahNumber}`}
           className="text-xs font-bold text-[#1B4931] hover:underline flex items-center gap-1 group"
         >
-          <span>Buka Surah</span>
+          <span>Buka Ayat</span>
           <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
         </Link>
       </div>

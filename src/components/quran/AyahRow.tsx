@@ -21,6 +21,7 @@ interface AyahRowProps {
   totalAyahs: number;
   onOpenTafsir: (ayahNumber: number) => void;
   allAyahs?: Ayah[];
+  isHighlighted?: boolean;
 }
 
 export default function AyahRow({
@@ -30,6 +31,7 @@ export default function AyahRow({
   totalAyahs,
   onOpenTafsir,
   allAyahs,
+  isHighlighted = false,
 }: AyahRowProps) {
   const { currentTrack, isPlaying, playTrack, togglePlayPause, selectedQari } = useAudioStore();
   const {
@@ -150,8 +152,10 @@ export default function AyahRow({
   return (
     <div
       id={`ayah-${ayah.nomorAyat}`}
-      className={`rounded-2xl p-5 mb-4 border transition-all duration-300 scroll-mt-72 sm:scroll-mt-64 ${
-        isCurrentPlaying
+      className={`rounded-2xl p-5 mb-4 border transition-all duration-500 scroll-mt-24 sm:scroll-mt-20 ${
+        isHighlighted
+          ? 'bg-[#FAF6EE] border-[#C5A059] shadow-lg ring-3 ring-[#C5A059]/70 scale-[1.008]'
+          : isCurrentPlaying
           ? 'bg-[#F5E6CC]/40 border-[#C5A059] shadow-md ring-2 ring-[#C5A059]/40'
           : 'bg-white border-[#E8DECD] hover:border-[#1B4931]/30 shadow-xs'
       }`}
@@ -160,14 +164,22 @@ export default function AyahRow({
       <div className="flex items-center justify-between pb-3.5 border-b border-[#E8DECD]/70 mb-4">
         {/* Circled Ayah Number Badge & Last Read status */}
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full border-2 border-[#C5A059] bg-[#FAF6EE] text-[#1B4931] flex items-center justify-center font-bold text-xs shadow-xs">
+          <div className={`w-9 h-9 rounded-full border-2 text-xs flex items-center justify-center font-bold shadow-xs transition-colors ${
+            isHighlighted
+              ? 'border-[#C5A059] bg-[#C5A059] text-white'
+              : 'border-[#C5A059] bg-[#FAF6EE] text-[#1B4931]'
+          }`}>
             {ayah.nomorAyat}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#6B6258] hidden sm:inline">
               Ayat {ayah.nomorAyat}
             </span>
-            {isLastRead ? (
+            {isHighlighted ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-[#C5A059] text-white text-[10px] font-bold shadow-xs flex items-center gap-1 animate-pulse">
+                <span>✦ Ayat Rujukan</span>
+              </span>
+            ) : isLastRead ? (
               <span className="px-2 py-0.5 rounded-full bg-[#1B4931] text-[#F5E6CC] text-[10px] font-bold shadow-2xs">
                 Terakhir Dibaca
               </span>

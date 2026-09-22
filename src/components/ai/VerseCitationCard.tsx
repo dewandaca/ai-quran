@@ -12,7 +12,7 @@ interface VerseCitationCardProps {
 export default function VerseCitationCard({ citation }: VerseCitationCardProps) {
   return (
     <Link
-      href={`/app/surah/${citation.surahNumber}#ayah-${citation.ayahNumber}`}
+      href={`/app/surah/${citation.surahNumber}?ayah=${citation.ayahNumber}#ayah-${citation.ayahNumber}`}
       className="block bg-white hover:bg-[#FAF6EE] border border-[#C5A059]/40 hover:border-[#1B4931] rounded-2xl p-3.5 shadow-xs transition group text-left mt-2"
     >
       <div className="flex items-center justify-between mb-1.5">

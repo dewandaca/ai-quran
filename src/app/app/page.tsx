@@ -149,7 +149,7 @@ export default function AppHomePage() {
 
             <div className="pt-6">
               <Link
-                href={`/app/surah/${lastReadSurah || 1}#ayah-${lastReadAyah || 1}`}
+                href={`/app/surah/${lastReadSurah || 1}?ayah=${lastReadAyah || 1}#ayah-${lastReadAyah || 1}`}
                 className="w-full py-3 px-4 rounded-xl bg-[#C5A059] hover:bg-[#b08e4d] text-[#181411] font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 cursor-pointer"
               >
                 <span>Lanjutkan Membaca</span>

@@ -26,11 +26,34 @@ function isArabicLine(str: string): boolean {
 
 function renderFormattedInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  const regex = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
   const segments = text.split(regex);
 
   segments.forEach((seg, i) => {
     if (!seg) return;
+    if (seg.startsWith('[') && seg.includes('](') && seg.endsWith(')')) {
+      const linkMatch = seg.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        const linkText = linkMatch[1];
+        let linkHref = linkMatch[2];
+        if (linkHref.includes('#ayah-') && !linkHref.includes('?ayah=')) {
+          const m = linkHref.match(/#ayah-(\d+)/);
+          if (m) {
+            linkHref = linkHref.replace('#ayah-', `?ayah=${m[1]}#ayah-`);
+          }
+        }
+        parts.push(
+          <a
+            key={i}
+            href={linkHref}
+            className="text-[#1B4931] hover:text-[#C5A059] font-bold underline decoration-[#C5A059] transition"
+          >
+            {linkText}
+          </a>
+        );
+        return;
+      }
+    }
     if (seg.startsWith('**') && seg.endsWith('**')) {
       parts.push(
         <strong key={i} className="font-bold text-[#1B4931]">

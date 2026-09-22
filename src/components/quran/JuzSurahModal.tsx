@@ -54,7 +54,7 @@ export default function JuzSurahModal({
           {surahs.map((item) => (
             <Link
               key={item.nomor}
-              href={`/app/surah/${item.nomor}#ayah-${item.startAyah}`}
+              href={`/app/surah/${item.nomor}?ayah=${item.startAyah}#ayah-${item.startAyah}`}
               onClick={onClose}
               className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-[#E8DECD] hover:border-[#1B4931]/40 hover:bg-[#F3EBDD]/40 transition shadow-xs group"
             >

@@ -232,7 +232,7 @@ function renderCitations(
               </div>
 
               <Link
-                href={`/app/surah/${cit.surahNumber}#ayah-${cit.ayahStart}`}
+                href={`/app/surah/${cit.surahNumber}?ayah=${cit.ayahStart}#ayah-${cit.ayahStart}`}
                 className="text-[11px] font-semibold text-[#C5A059] group-hover:text-[#1B4931] flex items-center gap-1 transition"
               >
                 <span>Buka Ayat</span>

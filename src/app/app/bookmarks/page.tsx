@@ -24,7 +24,7 @@ export default function BookmarksPage() {
             Terakhir Dibaca
           </span>
           <Link
-            href={`/app/surah/${lastReadSurah}#ayah-${lastReadAyah || 1}`}
+            href={`/app/surah/${lastReadSurah}?ayah=${lastReadAyah || 1}#ayah-${lastReadAyah || 1}`}
             className="block bg-linear-to-br from-[#1B4931] to-[#143828] text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition group border border-[#C5A059]/40"
           >
             <div className="flex items-center justify-between">
@@ -85,7 +85,7 @@ export default function BookmarksPage() {
                 className="bg-white rounded-2xl p-4 border border-[#E8DECD] shadow-xs hover:border-[#1B4931]/40 transition flex items-center justify-between gap-3"
               >
                 <Link
-                  href={`/app/surah/${b.surahNumber}#ayah-${b.ayahNumber}`}
+                  href={`/app/surah/${b.surahNumber}?ayah=${b.ayahNumber}#ayah-${b.ayahNumber}`}
                   className="flex-1 min-w-0"
                 >
                   <div className="flex items-center gap-2 mb-1">
