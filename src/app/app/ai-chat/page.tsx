@@ -190,7 +190,7 @@ export default function AIChatPage() {
             content: accumulated,
             isStreaming: true,
           });
-          scrollToBottom();
+          // Do not auto-scroll during chunks so user can read smoothly from the top
         },
         history
       );
@@ -210,7 +210,7 @@ export default function AIChatPage() {
       });
     } finally {
       setLoading(false);
-      scrollToBottom();
+      // Do not auto-scroll after output completes so user stays at the top of the answer
     }
   };
 
