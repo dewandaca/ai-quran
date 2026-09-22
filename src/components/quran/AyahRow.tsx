@@ -41,6 +41,8 @@ export default function AyahRow({
     addBookmark,
     removeBookmark,
     setLastRead,
+    lastReadSurah,
+    lastReadAyah,
   } = useSettingsStore();
 
   const [copied, setCopied] = useState(false);
@@ -50,6 +52,9 @@ export default function AyahRow({
     currentTrack?.surahNumber === surahNumber &&
     currentTrack?.ayahNumber === ayah.nomorAyat &&
     isPlaying;
+
+  const isLastRead =
+    lastReadSurah === surahNumber && lastReadAyah === ayah.nomorAyat;
 
   const bookmarked = isBookmarked(surahNumber, ayah.nomorAyat);
 
@@ -100,6 +105,7 @@ export default function AyahRow({
         surahName,
         ayah.teksIndonesia
       );
+      setLastRead(surahNumber, ayah.nomorAyat, surahName);
     }
   };
 
@@ -152,14 +158,29 @@ export default function AyahRow({
     >
       {/* Top action bar matching Gambar 2 & 3 */}
       <div className="flex items-center justify-between pb-3.5 border-b border-[#E8DECD]/70 mb-4">
-        {/* Circled Ayah Number Badge */}
-        <div className="flex items-center gap-3">
+        {/* Circled Ayah Number Badge & Last Read status */}
+        <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full border-2 border-[#C5A059] bg-[#FAF6EE] text-[#1B4931] flex items-center justify-center font-bold text-xs shadow-xs">
             {ayah.nomorAyat}
           </div>
-          <span className="text-xs font-bold text-[#6B6258] hidden sm:inline">
-            Ayat {ayah.nomorAyat}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#6B6258] hidden sm:inline">
+              Ayat {ayah.nomorAyat}
+            </span>
+            {isLastRead ? (
+              <span className="px-2 py-0.5 rounded-full bg-[#1B4931] text-[#F5E6CC] text-[10px] font-bold shadow-2xs">
+                Terakhir Dibaca
+              </span>
+            ) : (
+              <button
+                onClick={() => setLastRead(surahNumber, ayah.nomorAyat, surahName)}
+                className="text-[10px] font-semibold text-[#9C9286] hover:text-[#1B4931] hover:underline cursor-pointer transition"
+                title="Tandai ayat ini sebagai terakhir dibaca"
+              >
+                Tandai dibaca
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Action icons bar matching Gambar 2 & 3 */}

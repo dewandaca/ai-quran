@@ -10,8 +10,9 @@ PEDOMAN UTAMA:
 2. PONDASI SHAHIH: Berikan dalil ayat Al-Qur'an yang relevan dan selalu sebutkan rujukannya dalam format: [QS. Nama-Surah: Nomor-Ayat] (contoh: [QS. Al-Baqarah: 153]).
 3. TEKS ARAB JELAS & LENGKAP: Bila menyertakan ayat Al-Qur'an, penjelasan tafsir, atau doa (terutama saat menyebutkan 'Allah berfirman', firman Allah, atau dalil ayat), WAJIB tuliskan teks Arab berharakat secara lengkap di baris tersendiri dalam font Arab, disusul transliterasi (Latin) dan terjemahannya. JANGAN PERNAH mengutip firman Allah hanya berupa terjemahan tanpa menyertakan teks Arabnya.
 4. FORMAT RAPI & BERSIH: Gunakan bahasa mengalir, paragraf terstruktur, dan poin-poin yang mudah dibaca. JANGAN PERNAH memakai tanda kutip markdown mentah seperti '>' di awal baris dan JANGAN PERNAH memakai garis pemisah seperti '---' atau '***' di tengah ataupun di akhir jawaban. Tuliskan teks doa, terjemahan, dan kutipan secara langsung dan natural.
-5. JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
-6. DOA HARIAN & AMALAN: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari, sertakan doa ma'tsur yang relevan dari referensi yang disediakan.`;
+5.5: JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
+6. DOA HARIAN & AMALAN: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari, sertakan doa ma'tsur yang relevan dari referensi yang disediakan.
+7. PENJELASAN MENDALAM & TAFSIR: Bila pengguna menanyakan penjelasan, tafsir, makna, kandungan, atau keutamaan dari suatu ayat (misalnya Ayat Kursi), berikan penjelasan yang komprehensif, menguraikan makna kalimat per kalimat, hikmah di dalamnya, serta keutamaannya, bukan hanya menampilkan potongan ayatnya saja.`;
 
 export interface AICitation {
   surahNumber: number;
@@ -73,12 +74,23 @@ function cleanAssistantReply(text: string): string {
 function parseDirectVerseQuery(query: string): { surahNumber: number; ayahNumber: number } | null {
   const q = query.toLowerCase().replace(/['"`]/g, '').trim();
 
-  // 1. Ayat Kursi special case
+  // 1. REJECT if the query is an EXPLANATION, TAFSIR, INQUIRY, or QUESTION!
+  // If the user wants explanation, tafsir, meaning, wisdom, context, history, etc.,
+  // it MUST NOT be short-circuited to a raw verse lookup. The AI must explain it!
+  const isExplanationOrInquiry =
+    /\b(penjelasan|jelaskan|dijelaskan|tafsir|makna|kandungan|maksud|arti|keutamaan|fadhilah|faedah|hikmah|khasiat|manfaat|sebab|asbab|mengapa|kenapa|bagaimana|apa itu|siapa|tentang|hukum|cerita|kisah|rahasia|maksudnya|sejarah)\b/i.test(q) ||
+    /^(apa|bagaimana|kenapa|mengapa|siapa|jelaskan|ceritakan)/i.test(q);
+
+  if (isExplanationOrInquiry) {
+    return null;
+  }
+
+  // 2. Ayat Kursi direct lookup (only when directly asking for the verse itself)
   if (q.includes('kursi')) {
     return { surahNumber: 2, ayahNumber: 255 };
   }
 
-  // 2. Reject queries containing counts or duration (e.g. "puasa 3 hari", "shalat 5 waktu", "2 rakaat")
+  // 3. Reject queries containing counts or duration (e.g. "puasa 3 hari", "shalat 5 waktu", "2 rakaat")
   if (/\b\d+\s*(hari|waktu|rakaat|kali|bulan|tahun|orang|juz|malam)\b/i.test(q)) {
     return null;
   }
@@ -292,6 +304,35 @@ export async function POST(req: NextRequest) {
       duaResults = dRes;
     }
 
+    // Explicit detection for Ayat Kursi so it ALWAYS has the exact verse in context
+    if (message.toLowerCase().includes('kursi')) {
+      const hasKursi = verseResults.some((v) => v.surah_number === 2 && v.ayah_number === 255);
+      if (!hasKursi) {
+        try {
+          const res = await fetch('https://equran.id/api/v2/surat/2');
+          if (res.ok) {
+            const json = await res.json();
+            const ayah255 = json.data?.ayat?.find((a: { nomorAyat: number }) => a.nomorAyat === 255);
+            if (ayah255) {
+              verseResults.unshift({
+                id: 2255,
+                surah_number: 2,
+                ayah_number: 255,
+                surah_name: 'Al-Baqarah',
+                arabic_text: ayah255.teksArab,
+                transliteration: ayah255.teksLatin,
+                translation: ayah255.teksIndonesia,
+                tafsir_text: 'Ayat Kursi (QS. Al-Baqarah: 255) adalah ayat paling agung dalam Al-Qur\'an yang menegaskan keesaan, kemahahidupan, dan kemandirian Allah SWT (Al-Hayy, Al-Qayyum), kekuasaan mutlak, serta Kursi-Nya yang meliputi langit dan bumi.',
+                similarity: 1.0,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to inject Ayat Kursi context:', e);
+        }
+      }
+    }
+
     // Build context sections
     let contextParts: string[] = [];
 
@@ -328,7 +369,7 @@ export async function POST(req: NextRequest) {
 
     const systemPromptWithContext = `${SYSTEM_PROMPT}\n\n${fullContext}`;
 
-    // 3. Try Gemini API (gemini-3.6-flash first, then gemini-2.5-flash)
+    // 3. Try Gemini API (gemini-3.7-flash, then gemini-3.6-flash, then gemini-3.5-flash)
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (geminiKey) {
       // Build multi-turn contents for Gemini with conversation history
@@ -357,7 +398,7 @@ export async function POST(req: NextRequest) {
       // Add current user message
       geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-      const geminiModels = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+      const geminiModels = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
       for (const model of geminiModels) {
         try {
           const response = await fetch(
@@ -435,10 +476,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // If all models failed or are busy, return error message with NO citations
     return NextResponse.json({
       text: 'Maaf, layanan AI sedang sibuk. Silakan periksa koneksi internet Anda atau tanyakan kembali sesaat lagi.',
-      citations: extractCitations(verseResults, ''),
-      duaCitations: extractDuaCitations(duaResults),
+      citations: [],
+      duaCitations: [],
     });
   } catch (error) {
     console.error('API /api/ai error:', error);

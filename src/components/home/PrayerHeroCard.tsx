@@ -40,28 +40,40 @@ export default function PrayerHeroCard({
       <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full bg-[#C5A059]/10 pointer-events-none" />
 
       {/* Top row: City Location Badge & GPS */}
-      <div className="flex items-center justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-2">
-          {/* City selector badge */}
+      <div className="flex items-center justify-between gap-2.5 mb-4 relative z-10">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          {/* City selector badge with auto-scrolling marquee for long names */}
           <button
             onClick={onPressLocation}
-            className="flex items-center gap-1.5 bg-white/12 hover:bg-white/20 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-xs transition cursor-pointer border border-white/10"
+            className="flex items-center gap-1 bg-white/12 hover:bg-white/20 px-2 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-xs transition cursor-pointer border border-white/10 min-w-0 max-w-[130px] xs:max-w-[160px] sm:max-w-[200px]"
+            title={`Lokasi: ${cityName || 'Pilih Kota'}`}
           >
-            <MapPin size={13} className="text-[#C5A059]" />
-            <span className="truncate max-w-[130px]">{cityName || 'Pilih Kota'}</span>
-            <ChevronRight size={12} className="text-white/70" />
+            <MapPin size={13} className="text-[#C5A059] shrink-0" />
+            <div className="overflow-hidden whitespace-nowrap min-w-0 max-w-[75px] xs:max-w-[105px] sm:max-w-[145px] relative">
+              {(cityName || '').length > 14 ? (
+                <div className="animate-marquee whitespace-nowrap gap-3">
+                  <span>{cityName}</span>
+                  <span className="text-[#C5A059] opacity-70">•</span>
+                  <span>{cityName}</span>
+                  <span className="text-[#C5A059] opacity-70">•</span>
+                </div>
+              ) : (
+                <span className="truncate block">{cityName || 'Pilih Kota'}</span>
+              )}
+            </div>
+            <ChevronRight size={12} className="text-white/70 shrink-0" />
           </button>
 
-          {/* GPS Quick detect */}
+          {/* GPS Quick detect (Logo/Icon only on this card as requested) */}
           {onPressGps && (
             <button
               onClick={onPressGps}
               disabled={isDetectingLocation}
-              className="flex items-center gap-1 bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-[#C5A059] border border-white/10 transition cursor-pointer"
-              title="Deteksi Lokasi GPS"
+              className="flex items-center justify-center w-7 h-7 rounded-xl bg-white/15 hover:bg-white/25 text-[#C5A059] border border-white/10 transition cursor-pointer shrink-0"
+              title={isDetectingLocation ? 'Mendeteksi Lokasi GPS...' : 'Deteksi Lokasi GPS'}
+              aria-label="Deteksi Lokasi GPS"
             >
-              <Navigation size={12} className={isDetectingLocation ? 'animate-spin' : ''} />
-              <span>{isDetectingLocation ? 'GPS...' : 'GPS'}</span>
+              <Navigation size={13} className={isDetectingLocation ? 'animate-spin' : ''} />
             </button>
           )}
         </div>
@@ -69,7 +81,7 @@ export default function PrayerHeroCard({
         {/* Link to Full Schedule Page */}
         <Link
           href="/app/shalat"
-          className="text-[11px] font-bold text-[#C5A059] hover:underline flex items-center gap-0.5"
+          className="text-[11px] font-bold text-[#C5A059] hover:underline flex items-center gap-0.5 shrink-0 whitespace-nowrap"
         >
           <span>Jadwal Lengkap</span>
           <ChevronRight size={13} />

@@ -228,6 +228,11 @@ export default function ChatBubble({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isErrorMessage =
+    content.toLowerCase().includes('layanan ai sedang sibuk') ||
+    content.toLowerCase().includes('terjadi kesalahan saat menghubungi') ||
+    content.toLowerCase().includes('periksa koneksi internet anda');
+
   if (role === 'user') {
     return (
       <div className="flex justify-end mb-4 animate-in fade-in slide-in-from-bottom-2 duration-150">
@@ -287,8 +292,8 @@ export default function ChatBubble({
             )}
           </div>
 
-          {/* Verse Citation Cards */}
-          {citations && citations.length > 0 && (
+          {/* Verse Citation Cards (Never show on error or busy messages) */}
+          {!isErrorMessage && citations && citations.length > 0 && (
             <div className="mt-4 pt-3 border-t border-[#E8DECD]/70">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#C5A059] block mb-2">
                 Rujukan Ayat & Tafsir:
@@ -301,8 +306,8 @@ export default function ChatBubble({
             </div>
           )}
 
-          {/* Dua Citation Cards */}
-          {duaCitations && duaCitations.length > 0 && (
+          {/* Dua Citation Cards (Never show on error or busy messages) */}
+          {!isErrorMessage && duaCitations && duaCitations.length > 0 && (
             <div className="mt-4 pt-3 border-t border-[#E8DECD]/70">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4931] block mb-2">
                 Rujukan Doa Terkait:
