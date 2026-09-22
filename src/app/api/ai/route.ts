@@ -568,13 +568,56 @@ export async function POST(req: NextRequest) {
 
     const systemPromptWithContext = `${SYSTEM_PROMPT}\n\n${fullContext}`;
 
-    // 3. Try Gemini API (gemini-3.7-flash, then gemini-3.6-flash, then gemini-3.5-flash)
+    // 3. Try ultra-fast Groq API FIRST (Qwen 27B / GPT-OSS 120B respond in ~1.5s with excellent Arabic & Islamic grounding)
+    const groqKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
+    if (groqKey) {
+      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+      for (const model of groqModels) {
+        try {
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${groqKey}`,
+              'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(8000),
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: systemPromptWithContext },
+                ...conversationHistory.slice(-10),
+                { role: 'user', content: message },
+              ],
+              temperature: 0.3,
+              max_tokens: 3000,
+            }),
+          });
+
+          if (response.ok) {
+            const json = await response.json();
+            const rawReply = json.choices?.[0]?.message?.content;
+            if (rawReply && rawReply.trim().length > 0) {
+              const cleaned = cleanAssistantReply(rawReply);
+              const grounded = await groundReply(cleaned, verseResults);
+              const citations = await extractCitationsWithSupabase(verseResults, grounded);
+              return NextResponse.json({
+                text: grounded,
+                citations,
+                duaCitations: extractDuaCitations(duaResults),
+              });
+            }
+          }
+        } catch (groqErr) {
+          console.warn(`Groq (${model}) error:`, groqErr);
+        }
+      }
+    }
+
+    // 4. Secondary fallback: Gemini API with strict 6s timeout to prevent multi-minute hanging
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (geminiKey) {
-      // Build multi-turn contents for Gemini with conversation history
       const geminiContents: { role: string; parts: { text: string }[] }[] = [];
 
-      // First message includes system prompt + context
       geminiContents.push({
         role: 'user',
         parts: [{ text: `${systemPromptWithContext}\n\nPahami instruksi di atas dan jawab pertanyaan pengguna berikut.` }],
@@ -584,7 +627,6 @@ export async function POST(req: NextRequest) {
         parts: [{ text: 'Baik, saya siap menjawab pertanyaan seputar Al-Qur\'an, doa, dan Islam berdasarkan rujukan shahih.' }],
       });
 
-      // Add conversation history (last 10 messages for context)
       const historySlice = conversationHistory.slice(-10);
       for (const msg of historySlice) {
         if (msg.role === 'user') {
@@ -594,10 +636,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Add current user message
       geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-      const geminiModels = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+      const geminiModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash'];
       for (const model of geminiModels) {
         try {
           const response = await fetch(
@@ -605,11 +646,12 @@ export async function POST(req: NextRequest) {
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(6000), // Max 6s wait per model
               body: JSON.stringify({
                 contents: geminiContents,
                 generationConfig: {
                   temperature: 0.3,
-                  maxOutputTokens: 8192,
+                  maxOutputTokens: 4096,
                 },
               }),
             }
@@ -630,51 +672,7 @@ export async function POST(req: NextRequest) {
             }
           }
         } catch (geminiErr) {
-          console.warn(`Gemini (${model}) error:`, geminiErr);
-        }
-      }
-    }
-
-    // 4. Try Groq API fallback (qwen/qwen3.8-27b, then openai/gpt-oss-120b)
-    const groqKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
-    if (groqKey) {
-      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
-      for (const model of groqModels) {
-        try {
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${groqKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: 'system', content: systemPromptWithContext },
-                ...conversationHistory.slice(-10),
-                { role: 'user', content: message },
-              ],
-              temperature: 0.3,
-              max_tokens: 4096,
-            }),
-          });
-
-          if (response.ok) {
-            const json = await response.json();
-            const rawReply = json.choices?.[0]?.message?.content;
-            if (rawReply && rawReply.trim().length > 0) {
-              const cleaned = cleanAssistantReply(rawReply);
-              const grounded = await groundReply(cleaned, verseResults);
-              const citations = await extractCitationsWithSupabase(verseResults, grounded);
-              return NextResponse.json({
-                text: grounded,
-                citations,
-                duaCitations: extractDuaCitations(duaResults),
-              });
-            }
-          }
-        } catch (groqErr) {
-          console.warn(`Groq (${model}) error:`, groqErr);
+          console.warn(`Gemini (${model}) error or timeout:`, geminiErr);
         }
       }
     }
