@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchVerses, searchDuas, VectorSearchResult, DuaSearchResult } from '@/services/supabase';
+import { supabase, searchVerses, searchDuas, VectorSearchResult, DuaSearchResult } from '@/services/supabase';
 import { AIDuaCitation } from '@/services/aiService';
 
 const SYSTEM_PROMPT = `Anda adalah asisten Al-Qur'an dan konsultan Islami terpercaya bernama "EQuran AI".
@@ -10,9 +10,13 @@ PEDOMAN UTAMA:
 2. PONDASI SHAHIH: Berikan dalil ayat Al-Qur'an yang relevan dan selalu sebutkan rujukannya dalam format: [QS. Nama-Surah: Nomor-Ayat] (contoh: [QS. Al-Baqarah: 153]).
 3. TEKS ARAB JELAS & LENGKAP: Bila menyertakan ayat Al-Qur'an, penjelasan tafsir, atau doa (terutama saat menyebutkan 'Allah berfirman', firman Allah, atau dalil ayat), WAJIB tuliskan teks Arab berharakat secara lengkap di baris tersendiri dalam font Arab, disusul transliterasi (Latin) dan terjemahannya. JANGAN PERNAH mengutip firman Allah hanya berupa terjemahan tanpa menyertakan teks Arabnya.
 4. FORMAT RAPI & BERSIH: Gunakan bahasa mengalir, paragraf terstruktur, dan poin-poin yang mudah dibaca. JANGAN PERNAH memakai tanda kutip markdown mentah seperti '>' di awal baris dan JANGAN PERNAH memakai garis pemisah seperti '---' atau '***' di tengah ataupun di akhir jawaban. Tuliskan teks doa, terjemahan, dan kutipan secara langsung dan natural.
-5.5: JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
+5. JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
 6. DOA HARIAN & AMALAN: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari, sertakan doa ma'tsur yang relevan dari referensi yang disediakan.
-7. PENJELASAN MENDALAM & TAFSIR: Bila pengguna menanyakan penjelasan, tafsir, makna, kandungan, atau keutamaan dari suatu ayat (misalnya Ayat Kursi), berikan penjelasan yang komprehensif, menguraikan makna kalimat per kalimat, hikmah di dalamnya, serta keutamaannya, bukan hanya menampilkan potongan ayatnya saja.`;
+7. PENJELASAN MENDALAM & TAFSIR: Bila pengguna menanyakan penjelasan, tafsir, makna, kandungan, atau keutamaan dari suatu ayat (misalnya Ayat Kursi), berikan penjelasan yang komprehensif, menguraikan makna kalimat per kalimat, hikmah di dalamnya, serta keutamaannya, bukan hanya menampilkan potongan ayatnya saja.
+8. INTEGRITAS MUTLAK AYAT AL-QUR'AN (ANTI-HALUSINASI):
+- Al-Qur'an adalah firman Allah yang suci, tidak boleh ada satu huruf pun yang salah, tertukar, atau dikurangi.
+- DILARANG KERAS mengarang, mengubah awalan huruf, atau menuliskan teks Arab dan transliterasi Latin dari hafalan sendiri yang rentan salah/halusinasi. Contoh salah fatal: dilarang menulis 'اَلَّا' untuk ayat yang berbunyi 'وَلَا' (seperti QS. Al-Isra': 32 yang benar adalah 'وَلَا تَقْرَبُوا الزِّنٰى').
+- Jika ayat atau doa terdapat dalam referensi [REFERENSI AYAT AL-QUR'AN], Anda WAJIB MENYALIN 100% PERSIS teks Arab, transliterasi Latin, dan terjemahan langsung dari referensi tersebut. Jangan ubah huruf, harakat, maupun artinya!`;
 
 export interface AICitation {
   surahNumber: number;
@@ -198,9 +202,199 @@ async function generateEmbedding(text: string): Promise<number[]> {
   return [];
 }
 
-function extractCitations(results: VectorSearchResult[], text: string): AICitation[] {
-  if (results.length > 0) {
-    return results.map((r) => ({
+function normalizeSurahName(name: string): string {
+  return name.toLowerCase()
+    .replace(/[āá]/g, 'a')
+    .replace(/[īí]/g, 'i')
+    .replace(/[ūú]/g, 'u')
+    .replace(/[’'`]/g, '')
+    .trim();
+}
+
+function findVerseReferences(text: string): { surah: number; ayah: number }[] {
+  const refs: { surah: number; ayah: number }[] = [];
+  const seen = new Set<string>();
+
+  // Matches formats like:
+  // 1. QS. Al-Isra: 32 or Surah Al-Isra 32
+  // 2. Al-Isrā' [17]:32 or [17:32]
+  // 3. Al-Isra ayat 32 or Al-Isra ke-32
+  const p1 = /(?:QS\.?|Surah|Surat)\s+([A-Za-zāīū’'`\-\s]+?)[:\s]+(\d+)/gi;
+  const p2 = /([A-Za-zāīū’'`\-]+?)\s*\[(\d+)\]:\s*(\d+)/gi;
+  const p3 = /\[(\d+)[:\s]+(\d+)\]/g;
+  const p4 = /([A-Za-zāīū’'`\-]+?)\s+(?:ayat|ke-?)\s*(\d+)/gi;
+
+  let m;
+  while ((m = p1.exec(text)) !== null) {
+    const raw = normalizeSurahName(m[1]);
+    const ayah = parseInt(m[2], 10);
+    const sNum = SURAH_NAME_TO_NUMBER[raw] || SURAH_NAME_TO_NUMBER[raw.replace(/^al-?/, '')];
+    if (sNum && ayah > 0) {
+      const k = `${sNum}:${ayah}`;
+      if (!seen.has(k)) { seen.add(k); refs.push({ surah: sNum, ayah }); }
+    }
+  }
+
+  while ((m = p2.exec(text)) !== null) {
+    const sNum = parseInt(m[2], 10);
+    const ayah = parseInt(m[3], 10);
+    if (sNum >= 1 && sNum <= 114 && ayah > 0) {
+      const k = `${sNum}:${ayah}`;
+      if (!seen.has(k)) { seen.add(k); refs.push({ surah: sNum, ayah }); }
+    }
+  }
+
+  while ((m = p3.exec(text)) !== null) {
+    const sNum = parseInt(m[1], 10);
+    const ayah = parseInt(m[2], 10);
+    if (sNum >= 1 && sNum <= 114 && ayah > 0) {
+      const k = `${sNum}:${ayah}`;
+      if (!seen.has(k)) { seen.add(k); refs.push({ surah: sNum, ayah }); }
+    }
+  }
+
+  while ((m = p4.exec(text)) !== null) {
+    const raw = normalizeSurahName(m[1]);
+    const ayah = parseInt(m[2], 10);
+    const sNum = SURAH_NAME_TO_NUMBER[raw] || SURAH_NAME_TO_NUMBER[raw.replace(/^al-?/, '')];
+    if (sNum && ayah > 0) {
+      const k = `${sNum}:${ayah}`;
+      if (!seen.has(k)) { seen.add(k); refs.push({ surah: sNum, ayah }); }
+    }
+  }
+
+  return refs;
+}
+
+function isArabicLine(str: string): boolean {
+  const trimmed = str.trim();
+  if (!trimmed) return false;
+  const arabicMatches = trimmed.match(
+    /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g
+  );
+  const arabicCount = arabicMatches ? arabicMatches.length : 0;
+  return arabicCount >= 3 && arabicCount >= trimmed.replace(/\s+/g, '').length * 0.4;
+}
+
+/**
+ * Grounding Validator: Verifies and replaces any hallucinated Arabic text or
+ * Latin transliteration in the AI reply with 100% authentic, verified verses from Supabase.
+ */
+async function groundReply(replyText: string, knownVerses: VectorSearchResult[] = []): Promise<string> {
+  const refs = findVerseReferences(replyText);
+  if (refs.length === 0) return replyText;
+
+  const verseMap = new Map<string, { arabic_text: string; transliteration?: string; translation?: string; surah_name?: string }>();
+  for (const v of knownVerses) {
+    verseMap.set(`${v.surah_number}:${v.ayah_number}`, v);
+  }
+
+  const missingRefs = refs.filter(r => !verseMap.has(`${r.surah}:${r.ayah}`));
+  if (missingRefs.length > 0 && supabase) {
+    try {
+      const orClauses = missingRefs.map(r => `and(surah_number.eq.${r.surah},ayah_number.eq.${r.ayah})`).join(',');
+      const { data } = await supabase
+        .from('verses')
+        .select('surah_number, ayah_number, surah_name, arabic_text, transliteration, translation')
+        .or(orClauses);
+      if (data) {
+        for (const row of data) {
+          verseMap.set(`${row.surah_number}:${row.ayah_number}`, row);
+        }
+      }
+    } catch (e) {
+      console.warn('Grounding fetch missing verses error:', e);
+    }
+  }
+
+  const lines = replyText.split('\n');
+  let currentRef: { surah: number; ayah: number } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    const lineRefs = findVerseReferences(line);
+    if (lineRefs.length > 0) {
+      currentRef = lineRefs[0];
+      continue;
+    }
+
+    if (currentRef && isArabicLine(trimmed)) {
+      const key = `${currentRef.surah}:${currentRef.ayah}`;
+      const authentic = verseMap.get(key);
+      if (authentic && authentic.arabic_text) {
+        lines[i] = authentic.arabic_text.trim();
+
+        // Check if next non-empty line is Latin transliteration
+        for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+          const nextTrimmed = lines[j].trim();
+          if (nextTrimmed.length > 0) {
+            if (
+              !nextTrimmed.startsWith('“') &&
+              !nextTrimmed.startsWith('"') &&
+              !nextTrimmed.toLowerCase().startsWith('tafsir') &&
+              !nextTrimmed.startsWith('#') &&
+              !nextTrimmed.startsWith('>')
+            ) {
+              if (authentic.transliteration) {
+                lines[j] = authentic.transliteration.trim();
+              }
+            }
+            break;
+          }
+        }
+      }
+      currentRef = null;
+    }
+  }
+
+  return lines.join('\n');
+}
+
+async function extractCitationsWithSupabase(results: VectorSearchResult[], text: string): Promise<AICitation[]> {
+  const refs = findVerseReferences(text);
+  const citations: AICitation[] = [];
+  const seen = new Set<string>();
+
+  for (const r of refs) {
+    const key = `${r.surah}:${r.ayah}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      const match = results.find(v => v.surah_number === r.surah && v.ayah_number === r.ayah);
+      if (match) {
+        citations.push({
+          surahNumber: match.surah_number,
+          ayahNumber: match.ayah_number,
+          surahName: match.surah_name,
+          arabicText: match.arabic_text,
+          translation: match.translation,
+        });
+      } else if (supabase) {
+        try {
+          const { data } = await supabase
+            .from('verses')
+            .select('surah_number, ayah_number, surah_name, arabic_text, translation')
+            .eq('surah_number', r.surah)
+            .eq('ayah_number', r.ayah)
+            .maybeSingle();
+
+          if (data) {
+            citations.push({
+              surahNumber: data.surah_number,
+              ayahNumber: data.ayah_number,
+              surahName: data.surah_name,
+              arabicText: data.arabic_text,
+              translation: data.translation,
+            });
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (citations.length === 0 && results.length > 0) {
+    return results.slice(0, 3).map((r) => ({
       surahNumber: r.surah_number,
       ayahNumber: r.ayah_number,
       surahName: r.surah_name,
@@ -209,28 +403,6 @@ function extractCitations(results: VectorSearchResult[], text: string): AICitati
     }));
   }
 
-  const citations: AICitation[] = [];
-  const seen = new Set<string>();
-  const pattern = /(?:QS\.?|Surah|Surat)\s+([A-Za-z'\-\s]+?)[:\s]+(\d+)/gi;
-  let match;
-  while ((match = pattern.exec(text)) !== null) {
-    const rawSurah = match[1].trim().toLowerCase().replace(/['"`]/g, '');
-    const ayahNum = parseInt(match[2], 10);
-    const surahNum = SURAH_NAME_TO_NUMBER[rawSurah] || SURAH_NAME_TO_NUMBER[rawSurah.replace(/^al-?/, '')];
-
-    if (surahNum && ayahNum > 0 && ayahNum <= 286) {
-      const key = `${surahNum}-${ayahNum}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        const displayName = match[1].trim();
-        citations.push({
-          surahNumber: surahNum,
-          ayahNumber: ayahNum,
-          surahName: displayName.charAt(0).toUpperCase() + displayName.slice(1),
-        });
-      }
-    }
-  }
   return citations.slice(0, 4);
 }
 
@@ -333,6 +505,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 2b. Keyword search enhancement to guarantee high-relevance verses from Supabase (e.g. zina, riba, sabar)
+    const keywords = message.toLowerCase().match(/\b(zina|riba|sedekah|infaq|puasa|ramadhan|sabar|syirik|kematian|maut|neraka|surga|haji|umrah|zakat|judi|maysir|khamr|arak|orang tua|birrul walidain|anak yatim|sholat|shalat|wudhu|thaharah|taubat|hijab|jilbab|aurat|riya|hasad|dengki|ghibah|fitnah|jodoh|rezeki|tawakal|syukur|isra)\b/gi);
+    if (keywords && keywords.length > 0 && supabase) {
+      try {
+        const kw = keywords[0].toLowerCase();
+        const { data: kwMatches } = await supabase
+          .from('verses')
+          .select('id, surah_number, ayah_number, surah_name, arabic_text, transliteration, translation, tafsir_text')
+          .ilike('translation', `%${kw}%`)
+          .limit(3);
+
+        if (kwMatches && kwMatches.length > 0) {
+          for (const km of kwMatches) {
+            if (!verseResults.some(v => v.surah_number === km.surah_number && v.ayah_number === km.ayah_number)) {
+              verseResults.unshift({
+                ...km,
+                similarity: 0.95,
+              });
+            }
+          }
+        }
+      } catch (kwErr) {
+        console.warn('Keyword verse enhancement error:', kwErr);
+      }
+    }
+
     // Build context sections
     let contextParts: string[] = [];
 
@@ -342,6 +540,7 @@ export async function POST(req: NextRequest) {
           (r, i) =>
             `[${i + 1}] QS. ${r.surah_name} Ayat ${r.ayah_number}:\n` +
             `Arab: ${r.arabic_text}\n` +
+            (r.transliteration ? `Latin: ${r.transliteration}\n` : '') +
             `Arti: ${r.translation}\n` +
             `Tafsir: ${r.tafsir_text}\n`
         )
@@ -421,9 +620,11 @@ export async function POST(req: NextRequest) {
             const rawReply = json.candidates?.[0]?.content?.parts?.[0]?.text;
             if (rawReply && rawReply.trim().length > 0) {
               const cleaned = cleanAssistantReply(rawReply);
+              const grounded = await groundReply(cleaned, verseResults);
+              const citations = await extractCitationsWithSupabase(verseResults, grounded);
               return NextResponse.json({
-                text: cleaned,
-                citations: extractCitations(verseResults, cleaned),
+                text: grounded,
+                citations,
                 duaCitations: extractDuaCitations(duaResults),
               });
             }
@@ -463,9 +664,11 @@ export async function POST(req: NextRequest) {
             const rawReply = json.choices?.[0]?.message?.content;
             if (rawReply && rawReply.trim().length > 0) {
               const cleaned = cleanAssistantReply(rawReply);
+              const grounded = await groundReply(cleaned, verseResults);
+              const citations = await extractCitationsWithSupabase(verseResults, grounded);
               return NextResponse.json({
-                text: cleaned,
-                citations: extractCitations(verseResults, cleaned),
+                text: grounded,
+                citations,
                 duaCitations: extractDuaCitations(duaResults),
               });
             }
