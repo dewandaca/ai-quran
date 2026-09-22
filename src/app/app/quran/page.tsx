@@ -59,11 +59,11 @@ export default function QuranListPage() {
     <MobileFrame title="Daftar Surah & Juz">
       {/* Top Controls: Tab Switcher & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
-        {/* Tab Switcher: Surah vs Juz */}
-        <div className="inline-flex bg-[#F3EBDD] p-1 rounded-2xl border border-[#E8DECD] shrink-0">
+        {/* Tab Switcher: Surah vs Juz (Balanced 50/50 segmented control) */}
+        <div className="grid grid-cols-2 w-full sm:w-auto sm:flex bg-[#F3EBDD] p-1 rounded-2xl border border-[#E8DECD] shrink-0">
           <button
             onClick={() => setActiveTab('surah')}
-            className={`px-5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 sm:px-6 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === 'surah'
                 ? 'bg-[#1B4931] text-white shadow-xs'
                 : 'text-[#6B6258] hover:text-[#1B4931]'
@@ -75,7 +75,7 @@ export default function QuranListPage() {
 
           <button
             onClick={() => setActiveTab('juz')}
-            className={`px-5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 sm:px-6 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === 'juz'
                 ? 'bg-[#1B4931] text-white shadow-xs'
                 : 'text-[#6B6258] hover:text-[#1B4931]'

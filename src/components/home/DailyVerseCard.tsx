@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useTransition } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Sparkles, ArrowRight, Share2, Check, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, ArrowRight, Share2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/services/supabase';
 
 // 150+ Curated Inspirational Ayah Targets across the 114 Surahs
@@ -184,13 +184,6 @@ export default function DailyVerseCard() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showLatin, setShowLatin] = useState(false);
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Audio helper: pads number to 3 digits (e.g. 94 -> '094')
-  const pad3 = (n: number) => String(n).padStart(3, '0');
 
   // Fetch verse logic: first Supabase, then fallback to equran.id API
   const fetchVerseData = async (surahNumber: number, ayahNumber: number, fallbackSurahName?: string): Promise<VerseData | null> => {
@@ -286,12 +279,6 @@ export default function DailyVerseCard() {
     if (isRefreshing) return;
     setIsRefreshing(true);
 
-    // Stop existing audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    }
-
     // Pick a random target distinct from current
     let randomIndex = Math.floor(Math.random() * INSPIRATIONAL_TARGETS.length);
     let target = INSPIRATIONAL_TARGETS[randomIndex];
@@ -307,45 +294,9 @@ export default function DailyVerseCard() {
     setIsRefreshing(false);
   };
 
-  // Audio play / pause handler
-  const toggleAudio = () => {
-    if (isPlaying && audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-      return;
-    }
-
-    const audioUrl = `https://cdn.equran.id/audio-partial/Misyari-Rasyid-Al-Afasi/${pad3(verse.surahNumber)}${pad3(verse.ayahNumber)}.mp3`;
-    
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => setIsPlaying(false);
-    audio.onerror = () => setIsPlaying(false);
-
-    audio.play().then(() => {
-      setIsPlaying(true);
-    }).catch((err) => {
-      console.warn('Audio play prevented:', err);
-      setIsPlaying(false);
-    });
-  };
-
-  // Stop audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, []);
-
   const handleShare = () => {
-    const text = `${verse.arabic}\n\n"${verse.translation}"\n(QS. ${verse.surahName}: ${verse.ayahNumber})`;
+    const latin = verse.transliteration ? `\n\n"${verse.transliteration}"` : '';
+    const text = `${verse.arabic}${latin}\n\n"${verse.translation}"\n(QS. ${verse.surahName}: ${verse.ayahNumber})`;
     if (navigator.share) {
       navigator.share({ title: 'Ayat Inspirasi Hari Ini', text }).catch(() => {});
     } else {
@@ -401,15 +352,11 @@ export default function DailyVerseCard() {
           {verse.arabic}
         </p>
 
-        {/* Transliteration (Latin) if available */}
+        {/* Transliteration (Latin) directly shown by default */}
         {verse.transliteration && (
-          <div className="my-1.5">
-            {showLatin ? (
-              <p className="text-[11px] sm:text-xs text-[#6B6258] italic leading-relaxed">
-                {verse.transliteration}
-              </p>
-            ) : null}
-          </div>
+          <p className="text-xs text-[#6B6258] italic leading-relaxed my-1.5">
+            {verse.transliteration}
+          </p>
         )}
 
         {/* Translation */}
@@ -420,37 +367,9 @@ export default function DailyVerseCard() {
 
       {/* Bottom reference & actions */}
       <div className="flex items-center justify-between pt-3 border-t border-[#E8DECD]/50 mt-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[#C5A059]">
-            QS. {verse.surahName} : {verse.ayahNumber}
-          </span>
-
-          {/* Audio Recitation Button */}
-          <button
-            onClick={toggleAudio}
-            className={`p-1.5 rounded-full text-xs flex items-center gap-1 transition-colors cursor-pointer ${
-              isPlaying 
-                ? 'bg-[#1B4931] text-white' 
-                : 'bg-[#FAF6EE] text-[#1B4931] hover:bg-[#E8DECD]/50'
-            }`}
-            title={isPlaying ? 'Hentikan Audio' : 'Dengarkan Murottal'}
-          >
-            {isPlaying ? <VolumeX size={12} /> : <Volume2 size={12} />}
-            <span className="text-[10px] font-semibold pr-1">
-              {isPlaying ? 'Putar...' : 'Audio'}
-            </span>
-          </button>
-
-          {/* Toggle Latin Button */}
-          {verse.transliteration && (
-            <button
-              onClick={() => setShowLatin(!showLatin)}
-              className="text-[10px] text-[#6B6258] hover:text-[#1B4931] px-1.5 py-0.5 rounded border border-[#E8DECD] hover:bg-[#FAF6EE] transition-colors"
-            >
-              {showLatin ? 'Tutup Latin' : 'Latin'}
-            </button>
-          )}
-        </div>
+        <span className="text-xs font-bold text-[#C5A059]">
+          QS. {verse.surahName} : {verse.ayahNumber}
+        </span>
 
         {/* Open Surah Link */}
         <Link
