@@ -162,7 +162,7 @@ function MarkdownRenderer({ content }: { content: string }) {
                       <td key={cIdx} className="px-3.5 py-2.5 text-[#2C2621]">
                         {isArabicLine(cell) ? (
                           <span dir="rtl" className="font-arabic text-base sm:text-lg text-right block">
-                            {cell}
+                            {cell.replace(/^[\s*_~`>#-]*?(?:Teks\s+)?Arab(?:\s*Text)?[\s*_~`]*[:：-]?\s*/i, '').trim() || cell}
                           </span>
                         ) : (
                           renderFormattedInline(cell)
@@ -197,13 +197,14 @@ function MarkdownRenderer({ content }: { content: string }) {
             const qTrimmed = qLine.trim();
             if (!qTrimmed) return <div key={qIdx} className="h-1" />;
             if (isArabicLine(qTrimmed)) {
+              const cleanQ = qTrimmed.replace(/^[\s*_~`>#-]*?(?:Teks\s+)?Arab(?:\s*Text)?[\s*_~`]*[:：-]?\s*/i, '').trim();
               return (
                 <div
                   key={qIdx}
                   dir="rtl"
                   className="font-arabic text-xl sm:text-2xl text-right text-[#181411] leading-relaxed my-1"
                 >
-                  {qTrimmed}
+                  {cleanQ || qTrimmed}
                 </div>
               );
             }
@@ -218,15 +219,30 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
+    // Check if this line is just a standalone label like "Arab:" or "**Arab:**" before an Arabic line
+    const isStandaloneArabicLabel = /^[\s*_~`>#-]*?(?:Teks\s+)?Arab(?:\s*Text)?[\s*_~`]*:?$/i.test(trimmed);
+    if (isStandaloneArabicLabel) {
+      const nextNonEmpty = lines.slice(i + 1).find((l) => l.trim().length > 0);
+      if (nextNonEmpty && isArabicLine(nextNonEmpty)) {
+        // Skip redundant standalone label so it doesn't render as an orphaned "Arab:" text
+        continue;
+      }
+    }
+
     // 3. Arabic Verse / Text block
     if (isArabicLine(trimmed)) {
+      // Strip any prefixes like "Arab:", "Teks Arab:", "**Arab:**", etc. so "Arab:" doesn't appear inside the RTL card
+      const cleanedArabic = trimmed
+        .replace(/^[\s*_~`>#-]*?(?:Teks\s+)?Arab(?:\s*Text)?[\s*_~`]*[:：-]?\s*/i, '')
+        .trim();
+
       elements.push(
         <div
           key={`arabic-${i}`}
           dir="rtl"
           className="font-arabic text-2xl sm:text-3xl text-right text-[#181411] leading-[2.3] my-3 p-4 bg-[#FAF6EE] rounded-2xl border border-[#E8DECD] shadow-xs select-all transition-all hover:border-[#C5A059]/60"
         >
-          {trimmed}
+          {cleanedArabic || trimmed}
         </div>
       );
       continue;
@@ -315,6 +331,7 @@ export default function ChatBubble({
       .replace(/#{1,6}\s+/g, '')
       .replace(/^>\s?/gm, '')
       .replace(/^[-*_]{3,}\s*$/gm, '')
+      .replace(/^(\s*(?:\*\*)?(?:teks\s+)?arab(?:\*\*)?\s*[:：-]?\s*)(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/gim, '')
       .trim();
     navigator.clipboard.writeText(plain);
     setCopied(true);

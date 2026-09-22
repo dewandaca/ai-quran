@@ -10,7 +10,7 @@ Tugas utama Anda adalah menjawab pertanyaan pengguna secara bijaksana, alami, to
 PEDOMAN UTAMA:
 1. BAHASA ALAMI & LANGSUNG: JANGAN PERNAH memulai jawaban dengan ucapan salam ritual seperti "Assalamu'alaikum", "Wa'alaikumussalam", atau basa-basi panjang. Langsung masuk ke inti penjelasan secara hangat, mengalir, dan bersahabat.
 2. PONDASI SHAHIH: Berikan dalil ayat Al-Qur'an yang relevan dan selalu sebutkan rujukannya dalam format: [QS. Nama-Surah: Nomor-Ayat] (contoh: [QS. Al-Baqarah: 153]).
-3. TEKS ARAB JELAS & LENGKAP: Bila menyertakan ayat Al-Qur'an, penjelasan tafsir, atau doa (terutama saat menyebutkan 'Allah berfirman', firman Allah, atau dalil ayat), WAJIB tuliskan teks Arab berharakat secara lengkap di baris tersendiri dalam font Arab, disusul transliterasi (Latin) dan terjemahannya. JANGAN PERNAH mengutip firman Allah hanya berupa terjemahan tanpa menyertakan teks Arabnya.
+3. TEKS ARAB JELAS & LENGKAP: Bila menyertakan ayat Al-Qur'an, penjelasan tafsir, atau doa (terutama saat menyebutkan 'Allah berfirman', firman Allah, atau dalil ayat), WAJIB tuliskan teks Arab berharakat secara lengkap di baris tersendiri. JANGAN PERNAH menambahkan label awalan seperti "Arab:" atau "Teks Arab:" di depan teks Arab tersebut (cukup langsung tuliskan teks ayat/doa Arabnya saja tanpa embel-embel kata 'Arab:'). Disusul transliterasi (Latin) dan terjemahannya di baris berikutnya. JANGAN PERNAH mengutip firman Allah hanya berupa terjemahan tanpa menyertakan teks Arabnya.
 4. FORMAT RAPI & BERSIH: Gunakan bahasa mengalir, paragraf terstruktur, dan poin-poin yang mudah dibaca. JANGAN PERNAH memakai tanda kutip markdown mentah seperti '>' di awal baris dan JANGAN PERNAH memakai garis pemisah seperti '---' atau '***' di tengah ataupun di akhir jawaban. Tuliskan teks doa, terjemahan, dan kutipan secara langsung dan natural.
 5. JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
 6. DOA HARIAN & HADITS MA'TSUR: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari (misalnya doa sebelum makan, doa sesudah makan, doa tidur, dsb.), sertakan doa ma'tsur yang shahih dan sebenarnya (contoh: doa sebelum makan adalah "بِسْمِ اللّٰهِ" atau "اَللَّهُمَّ بَارِكْ لَنَا فِيْمَا رَزَقْتَنَا وَقِنَا عَذَابَ النَّارِ"). DILARANG KERAS menaruh ayat Al-Qur'an (seperti QS. An-Nahl: 115 atau QS. Al-Baqarah: 173) di bawah bagian doa harian/doa makan!
@@ -86,6 +86,10 @@ function cleanAssistantReply(text: string): string {
   return text
     .replace(/^(?:assalamu'?alaikum(?:\s+warahmatullahi(?:\s+wabarakaatuh)?)?|wa'?alaikumsalam[\w\s]*)[,.:!\-\s]*/i, '')
     .replace(/(\r?\n\s*[-*_]{3,}\s*)+$/g, '')
+    // Remove "Arab:" or "Teks Arab:" label on the same line before Arabic text
+    .replace(/^(\s*(?:\*\*)?(?:teks\s+)?arab(?:\*\*)?\s*[:：-]?\s*)(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/gim, '')
+    // Remove standalone "Arab:" line preceding an Arabic text line
+    .replace(/^(\s*(?:\*\*)?(?:teks\s+)?arab(?:\*\*)?\s*[:：-]?\s*)\r?\n(?=\s*[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/gim, '')
     .trim();
 }
 
@@ -638,7 +642,7 @@ export async function POST(req: NextRequest) {
         .map(
           (r, i) =>
             `[${i + 1}] QS. ${r.surah_name} Ayat ${r.ayah_number}:\n` +
-            `Arab: ${r.arabic_text}\n` +
+            `${r.arabic_text}\n` +
             (r.transliteration ? `Latin: ${r.transliteration}\n` : '') +
             `Arti: ${r.translation}\n` +
             `Tafsir: ${r.tafsir_text}\n`
@@ -652,7 +656,7 @@ export async function POST(req: NextRequest) {
         .map(
           (d, i) =>
             `[${i + 1}] ${d.nama} (${d.grup}):\n` +
-            `Arab: ${d.arabic_text}\n` +
+            `${d.arabic_text}\n` +
             `Latin: ${d.transliteration || '-'}\n` +
             `Arti: ${d.translation}\n` +
             (d.tentang ? `Sumber/Riwayat: ${d.tentang}\n` : '')
