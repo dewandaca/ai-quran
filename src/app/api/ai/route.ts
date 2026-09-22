@@ -11,12 +11,13 @@ PEDOMAN UTAMA:
 3. TEKS ARAB JELAS & LENGKAP: Bila menyertakan ayat Al-Qur'an, penjelasan tafsir, atau doa (terutama saat menyebutkan 'Allah berfirman', firman Allah, atau dalil ayat), WAJIB tuliskan teks Arab berharakat secara lengkap di baris tersendiri dalam font Arab, disusul transliterasi (Latin) dan terjemahannya. JANGAN PERNAH mengutip firman Allah hanya berupa terjemahan tanpa menyertakan teks Arabnya.
 4. FORMAT RAPI & BERSIH: Gunakan bahasa mengalir, paragraf terstruktur, dan poin-poin yang mudah dibaca. JANGAN PERNAH memakai tanda kutip markdown mentah seperti '>' di awal baris dan JANGAN PERNAH memakai garis pemisah seperti '---' atau '***' di tengah ataupun di akhir jawaban. Tuliskan teks doa, terjemahan, dan kutipan secara langsung dan natural.
 5. JAWABAN TUNTAS & LENGKAP: Jelaskan jawaban sampai tuntas dan lengkap hingga kesimpulan. Jangan pernah memotong kalimat di tengah jawaban.
-6. DOA HARIAN & AMALAN: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari, sertakan doa ma'tsur yang relevan dari referensi yang disediakan.
+6. DOA HARIAN & HADITS MA'TSUR: Bila pertanyaan menyangkut doa, permohonan, atau amalan sehari-hari (misalnya doa sebelum makan, doa sesudah makan, doa tidur, dsb.), sertakan doa ma'tsur yang shahih dan sebenarnya (contoh: doa sebelum makan adalah "بِسْمِ اللّٰهِ" atau "اَللَّهُمَّ بَارِكْ لَنَا فِيْمَا رَزَقْتَنَا وَقِنَا عَذَابَ النَّارِ"). DILARANG KERAS menaruh ayat Al-Qur'an (seperti QS. An-Nahl: 115 atau QS. Al-Baqarah: 173) di bawah bagian doa harian/doa makan!
 7. PENJELASAN MENDALAM & TAFSIR: Bila pengguna menanyakan penjelasan, tafsir, makna, kandungan, atau keutamaan dari suatu ayat (misalnya Ayat Kursi), berikan penjelasan yang komprehensif, menguraikan makna kalimat per kalimat, hikmah di dalamnya, serta keutamaannya, bukan hanya menampilkan potongan ayatnya saja.
 8. INTEGRITAS MUTLAK AYAT AL-QUR'AN (ANTI-HALUSINASI):
 - Al-Qur'an adalah firman Allah yang suci, tidak boleh ada satu huruf pun yang salah, tertukar, atau dikurangi.
-- DILARANG KERAS mengarang, mengubah awalan huruf, atau menuliskan teks Arab dan transliterasi Latin dari hafalan sendiri yang rentan salah/halusinasi. Contoh salah fatal: dilarang menulis 'اَلَّا' untuk ayat yang berbunyi 'وَلَا' (seperti QS. Al-Isra': 32 yang benar adalah 'وَلَا تَقْرَبُوا الزِّنٰى').
-- Jika ayat atau doa terdapat dalam referensi [REFERENSI AYAT AL-QUR'AN], Anda WAJIB MENYALIN 100% PERSIS teks Arab, transliterasi Latin, dan terjemahan langsung dari referensi tersebut. Jangan ubah huruf, harakat, maupun artinya!`;
+- DILARANG KERAS mengarang, mengubah awalan huruf, atau menuliskan teks Arab dan transliterasi Latin dari hafalan sendiri yang rentan salah/halusinasi.
+- Jika ayat atau doa terdapat dalam referensi [REFERENSI AYAT AL-QUR'AN], Anda WAJIB MENYALIN 100% PERSIS teks Arab, transliterasi Latin, dan terjemahan langsung dari referensi tersebut. Jangan ubah huruf, harakat, maupun artinya!
+- JANGAN PERNAH menukar ayat Al-Qur'an dengan doa makan atau doa harian lainnya. Teks ayat Al-Qur'an hanya untuk dalil firman Allah yang bersangkutan.`;
 
 export interface AICitation {
   surahNumber: number;
@@ -308,44 +309,71 @@ async function groundReply(replyText: string, knownVerses: VectorSearchResult[] 
   }
 
   const lines = replyText.split('\n');
-  let currentRef: { surah: number; ayah: number } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const trimmed = line.trim();
-
     const lineRefs = findVerseReferences(line);
-    if (lineRefs.length > 0) {
-      currentRef = lineRefs[0];
-      continue;
+    if (lineRefs.length === 0) continue;
+
+    const ref = lineRefs[0];
+    const key = `${ref.surah}:${ref.ayah}`;
+    const authentic = verseMap.get(key);
+    if (!authentic || !authentic.arabic_text) continue;
+
+    // Scan strictly within the immediate next 1-3 lines for the verse's Arabic text.
+    // If we encounter a bullet item, numbered list, markdown heading, or a "Doa" / "Hadits" label, stop immediately.
+    let targetArabicLineIndex = -1;
+    for (let k = i + 1; k < Math.min(i + 4, lines.length); k++) {
+      const nextLine = lines[k].trim();
+      if (!nextLine) continue; // blank line allowed
+
+      // If we encounter a list item, markdown heading, or a "Doa" / "Hadits" / "Dzikir" label, abort
+      if (
+        /^[-*•]/.test(nextLine) ||
+        /^\d+\./.test(nextLine) ||
+        /^[a-zA-Z]\./.test(nextLine) ||
+        /^#{1,6}\s/.test(nextLine) ||
+        /\b(?:doa|hadis|hadits|dzikir)\b/i.test(nextLine)
+      ) {
+        break;
+      }
+
+      if (isArabicLine(nextLine)) {
+        // Double check: if the preceding line mentions "doa" or "hadits", don't treat as Quran verse
+        const prevLine = lines[k - 1]?.trim() || '';
+        if (/\b(?:doa|hadis|hadits)\b/i.test(prevLine)) {
+          break;
+        }
+        targetArabicLineIndex = k;
+        break;
+      } else {
+        // If we hit non-Arabic non-blank text (e.g. regular Indonesian sentence), this citation was an inline reference!
+        break;
+      }
     }
 
-    if (currentRef && isArabicLine(trimmed)) {
-      const key = `${currentRef.surah}:${currentRef.ayah}`;
-      const authentic = verseMap.get(key);
-      if (authentic && authentic.arabic_text) {
-        lines[i] = authentic.arabic_text.trim();
+    if (targetArabicLineIndex !== -1) {
+      lines[targetArabicLineIndex] = authentic.arabic_text.trim();
 
-        // Check if next non-empty line is Latin transliteration
-        for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-          const nextTrimmed = lines[j].trim();
-          if (nextTrimmed.length > 0) {
-            if (
-              !nextTrimmed.startsWith('“') &&
-              !nextTrimmed.startsWith('"') &&
-              !nextTrimmed.toLowerCase().startsWith('tafsir') &&
-              !nextTrimmed.startsWith('#') &&
-              !nextTrimmed.startsWith('>')
-            ) {
-              if (authentic.transliteration) {
-                lines[j] = authentic.transliteration.trim();
-              }
+      // Check if next non-empty line is Latin transliteration
+      for (let j = targetArabicLineIndex + 1; j < Math.min(targetArabicLineIndex + 4, lines.length); j++) {
+        const nextTrimmed = lines[j].trim();
+        if (nextTrimmed.length > 0) {
+          if (
+            !nextTrimmed.startsWith('“') &&
+            !nextTrimmed.startsWith('"') &&
+            !nextTrimmed.toLowerCase().startsWith('arti') &&
+            !nextTrimmed.toLowerCase().startsWith('tafsir') &&
+            !nextTrimmed.startsWith('#') &&
+            !nextTrimmed.startsWith('>')
+          ) {
+            if (authentic.transliteration) {
+              lines[j] = authentic.transliteration.trim();
             }
-            break;
           }
+          break;
         }
       }
-      currentRef = null;
     }
   }
 

@@ -68,8 +68,13 @@ export default function TafsirContentRenderer({
 
   // 3. Process the tafsir text into structured blocks
   const blocks = useMemo(() => {
-    // Normalise double newlines
-    const rawParagraphs = cleanTeks
+    // Normalize single newlines before list items so they become independent blocks
+    const normalized = cleanTeks.replace(
+      /\n(?=(?:[a-zA-Z]|\d+|\([a-zA-Z0-9]+\))[.)]\s*|[•\-\*]\s+)/g,
+      '\n\n'
+    );
+
+    const rawParagraphs = normalized
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .filter(Boolean);
@@ -78,36 +83,74 @@ export default function TafsirContentRenderer({
       // Check if this paragraph contains Quran citations
       const citationsInPara = extractQuranCitations(para);
 
-      // Check if this paragraph is a Hadith or Quote
+      // 1. Check if List Item (numbered e.g. "1.", lettered e.g. "a." or "a.Keluar", parenthesized e.g. "(a)", or bullets • -)
+      const listMatch = para.match(/^(?:([a-zA-Z]|\d+|\([a-zA-Z0-9]+\))[.)]\s*|[•\-\*]\s+)([\s\S]*)/);
+      if (listMatch) {
+        const marker = listMatch[1] ? listMatch[1].replace(/[()]/g, '') : '•';
+        const content = listMatch[2] ? listMatch[2].trim() : '';
+        return {
+          id: `block-${idx}`,
+          type: 'list_item' as const,
+          marker,
+          content,
+          rawText: para,
+          citations: citationsInPara,
+        };
+      }
+
+      // 2. Check if this paragraph is a Hadith or Quote
       const isHadithOrQuote =
         /^(?:Hadis|Hadits|Nabi saw bersabda|Rasulullah saw bersabda|Dari\s+[A-Z]|Abu Hurairah juga|Kalau kita perhatikan bahwa sahabat)/i.test(
           para
         ) || para.includes('(Riwayat ');
 
-      // Check if this is a Section Heading (short line without final period or specific keywords)
+      if (isHadithOrQuote) {
+        return {
+          id: `block-${idx}`,
+          type: 'hadith_quote' as const,
+          rawText: para,
+          citations: citationsInPara,
+        };
+      }
+
+      // 3. Check if Section Heading (genuine title, NOT list item, NOT narrative sentence, NOT quote)
+      const isExplicitHeading = /^#{1,4}\s+/.test(para);
+      const hasPredicate = /\b(?:ialah|adalah|merupakan|bahwa|bahwasanya|seperti diriwayatkan|sebagaimana)\b/i.test(para);
+      const endsWithPunct = /[.;:,!?]$/.test(para);
+      const isQuoteLine = /^["'“]/.test(para);
+      const isKnownHeadingKeyword = /^(?:Hikmah|Makna kata|Sebab Turunnya|Asbabun Nuzul|Kesimpulan|Pendapat Ulama)\b/i.test(para);
+
       const isHeading =
-        (para.length < 60 && !para.endsWith('.') && !para.includes(':') && !/^\d+\./.test(para)) ||
-        /^(?:Hikmah|Makna kata|Sebab Turunnya|Asbabun Nuzul|Kesimpulan|Pendapat Ulama)/i.test(para);
+        isExplicitHeading ||
+        (!hasPredicate && !endsWithPunct && !isQuoteLine && para.length < 70 && (
+          isKnownHeadingKeyword ||
+          (para.length < 50 && !para.includes(':'))
+        ));
 
-      // Check if numbered list (e.g. "1.Basmalah..." or "1. ...")
-      const numberedMatch = para.match(/^(\d+)\.\s*([\s\S]*)/);
+      if (isHeading) {
+        return {
+          id: `block-${idx}`,
+          type: 'heading' as const,
+          rawText: para.replace(/^#{1,4}\s+/, ''),
+          citations: citationsInPara,
+        };
+      }
 
+      // 4. Standard Paragraph
       return {
         id: `block-${idx}`,
+        type: 'paragraph' as const,
         rawText: para,
-        isHeading,
-        isHadithOrQuote,
-        numbered: numberedMatch ? { num: numberedMatch[1], content: numberedMatch[2] } : null,
         citations: citationsInPara,
       };
     });
-  }, [teks]);
+  }, [cleanTeks]);
 
   return (
     <div className={`space-y-3.5 ${fontSizeClass} text-[#2C2621] leading-relaxed`}>
       {blocks.map((block) => {
-        // A. Heading Block
-        if (block.isHeading) {
+        // A. Heading Block (Only for real titles/section headers)
+        if (block.type === 'heading') {
           return (
             <div
               key={block.id}
@@ -121,27 +164,27 @@ export default function TafsirContentRenderer({
           );
         }
 
-        // B. Numbered Point Block
-        if (block.numbered) {
+        // B. List Item Block (Numbered 1., Lettered a., b., c., bullets)
+        if (block.type === 'list_item') {
           return (
-            <div key={block.id} className="space-y-2.5 my-3">
+            <div key={block.id} className="space-y-2.5 my-2.5">
               <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#1B4931]/10 text-[#1B4931] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-[#1B4931]/20">
-                  {block.numbered.num}
+                <span className="w-6 h-6 rounded-full bg-[#1B4931]/10 text-[#1B4931] font-semibold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-[#1B4931]/20 select-none">
+                  {block.marker}
                 </span>
-                <div className="flex-1 whitespace-pre-line text-[#2C2621]">
-                  {block.numbered.content}
+                <div className="flex-1 whitespace-pre-line text-[#2C2621] leading-relaxed">
+                  {block.content}
                 </div>
               </div>
 
-              {/* Render cited verses in this numbered block if any */}
+              {/* Render cited verses in this list item if any */}
               {renderCitations(block.citations, resolvedVerses, loadingCitations)}
             </div>
           );
         }
 
         // C. Hadith / Atsar Callout Box
-        if (block.isHadithOrQuote) {
+        if (block.type === 'hadith_quote') {
           return (
             <div key={block.id} className="space-y-2.5 my-3">
               <div className="pl-4 pr-3.5 py-3 border-l-3 border-[#C5A059] bg-[#FAF6EE] rounded-r-2xl space-y-1.5 shadow-2xs">
