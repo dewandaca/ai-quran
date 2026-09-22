@@ -17,10 +17,15 @@ import {
   Sparkles,
   BookOpen,
   Compass,
+  BellRing,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import CityPickerModal from '@/components/home/CityPickerModal';
 import { useShalatStore } from '@/stores/useShalatStore';
+import { sendTestPrayerNotification } from '@/utils/prayerNotification';
 
 function getHijriYear(): string {
   const gregorianYear = new Date().getFullYear();
@@ -56,6 +61,51 @@ export default function ShalatPage() {
 
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [copiedDoa, setCopiedDoa] = useState(false);
+  const [isTestingNotif, setIsTestingNotif] = useState(false);
+  const [testNotifResult, setTestNotifResult] = useState<{
+    type: 'success' | 'warning' | 'error';
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (testNotifResult) {
+      const timer = setTimeout(() => {
+        setTestNotifResult(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [testNotifResult]);
+
+  const handleTestNotification = async () => {
+    setIsTestingNotif(true);
+    setTestNotifResult(null);
+    try {
+      const res = await sendTestPrayerNotification(kabkota);
+      if (res.status === 'granted') {
+        setTestNotifResult({
+          type: 'success',
+          message: res.message,
+        });
+      } else if (res.status === 'denied') {
+        setTestNotifResult({
+          type: 'error',
+          message: res.message,
+        });
+      } else {
+        setTestNotifResult({
+          type: 'warning',
+          message: res.message,
+        });
+      }
+    } catch {
+      setTestNotifResult({
+        type: 'error',
+        message: 'Gagal mengirimkan notifikasi.',
+      });
+    } finally {
+      setIsTestingNotif(false);
+    }
+  };
 
   useEffect(() => {
     loadSchedule();
@@ -226,13 +276,60 @@ export default function ShalatPage() {
 
         {/* Bento 2: 8 Waktu Sholat Hari Ini (md:col-span-7) */}
         <div className="md:col-span-7 bg-white rounded-3xl p-5 sm:p-6 border border-[#E8DECD] shadow-xs flex flex-col justify-between">
-          <div className="mb-4">
-            <h3 className="text-base font-bold text-[#1B4931]">
-              Waktu Sholat Hari Ini
-            </h3>
-            <p className="text-xs text-[#6B6258]">
-              Jadwal resmi Kementerian Agama RI
-            </p>
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[#1B4931]">
+                  Waktu Sholat Hari Ini
+                </h3>
+                <p className="text-xs text-[#6B6258]">
+                  Jadwal resmi Kementerian Agama RI
+                </p>
+              </div>
+
+              {/* Test Notification Button */}
+              <button
+                onClick={handleTestNotification}
+                disabled={isTestingNotif}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-[#1B4931] bg-[#FAF6EE] hover:bg-[#F2ECE1] border border-[#E8DECD] transition cursor-pointer shadow-2xs hover:shadow-xs active:scale-95 disabled:opacity-60"
+                title="Uji coba notifikasi browser dan nada pengingat shalat"
+              >
+                <BellRing
+                  size={14}
+                  className={isTestingNotif ? 'animate-bounce text-[#C5A059]' : 'text-[#C5A059]'}
+                />
+                <span>{isTestingNotif ? 'Menguji...' : 'Tes Notifikasi'}</span>
+              </button>
+            </div>
+
+            {/* Test Notification Feedback Banner */}
+            {testNotifResult && (
+              <div
+                className={`mb-4 p-3 rounded-2xl flex items-center justify-between gap-2.5 text-xs animate-in fade-in duration-200 border ${
+                  testNotifResult.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : testNotifResult.type === 'warning'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {testNotifResult.type === 'success' ? (
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                  )}
+                  <span>{testNotifResult.message}</span>
+                </div>
+                <button
+                  onClick={() => setTestNotifResult(null)}
+                  className="p-1 rounded-lg hover:bg-black/5 text-current/60 hover:text-current transition cursor-pointer"
+                  title="Tutup pesan"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
           {isLoading ? (
