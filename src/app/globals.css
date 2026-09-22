@@ -123,7 +123,8 @@ body {
 .animate-marquee {
   display: inline-flex;
   width: max-content;
-  animation: marquee 12s linear infinite;
+  will-change: transform;
+  animation: marquee 8s linear infinite;
 }
 
 .animate-marquee:hover {

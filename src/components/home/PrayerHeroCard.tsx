@@ -49,13 +49,13 @@ export default function PrayerHeroCard({
             title={`Lokasi: ${cityName || 'Pilih Kota'}`}
           >
             <MapPin size={13} className="text-[#C5A059] shrink-0" />
-            <div className="overflow-hidden whitespace-nowrap min-w-0 max-w-[75px] xs:max-w-[105px] sm:max-w-[145px] relative">
-              {(cityName || '').length > 14 ? (
-                <div className="animate-marquee whitespace-nowrap gap-3">
-                  <span>{cityName}</span>
-                  <span className="text-[#C5A059] opacity-70">•</span>
-                  <span>{cityName}</span>
-                  <span className="text-[#C5A059] opacity-70">•</span>
+            <div className="overflow-hidden whitespace-nowrap min-w-0 max-w-[85px] xs:max-w-[115px] sm:max-w-[155px] relative">
+              {(cityName || '').length > 8 ? (
+                <div className="animate-marquee inline-flex whitespace-nowrap items-center">
+                  <span className="pr-2">{cityName}</span>
+                  <span className="text-[#C5A059] opacity-70 pr-2">•</span>
+                  <span className="pr-2">{cityName}</span>
+                  <span className="text-[#C5A059] opacity-70 pr-2">•</span>
                 </div>
               ) : (
                 <span className="truncate block">{cityName || 'Pilih Kota'}</span>
