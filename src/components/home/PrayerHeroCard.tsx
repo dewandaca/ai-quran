@@ -121,14 +121,14 @@ export default function PrayerHeroCard({
               key={p.name}
               className={`flex flex-col items-center justify-center p-2 rounded-xl transition ${
                 isActive
-                  ? 'bg-white text-[#1B4931] shadow-md font-bold'
+                  ? 'bg-[#C5A059] text-white shadow-md font-bold'
                   : 'bg-white/5 text-white/90 hover:bg-white/10'
               }`}
             >
-              <span className={`text-[10px] font-semibold mb-1 ${isActive ? 'text-[#1B4931]' : 'text-white/70'}`}>
+              <span className={`text-[10px] font-semibold mb-1 ${isActive ? 'text-white' : 'text-white/70'}`}>
                 {p.name}
               </span>
-              <Icon size={16} className={`my-0.5 ${isActive ? 'text-[#1B4931]' : 'text-[#C5A059]'}`} />
+              <Icon size={16} className={`my-0.5 ${isActive ? 'text-white' : 'text-[#C5A059]'}`} />
               <span className="text-[11px] font-mono mt-1 font-semibold">
                 {p.time}
               </span>
