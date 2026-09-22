@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import {
   Send,
   Sparkles,
@@ -374,8 +375,14 @@ export default function AIChatPage() {
   // ──────────── EMPTY STATE (no active room or empty room) ────────────
   const EmptyState = (
     <div className="flex-1 flex flex-col items-center justify-center text-center py-6 px-2">
-      <div className="w-16 h-16 rounded-2xl bg-[#1B4931] border-2 border-[#C5A059] flex items-center justify-center text-[#C5A059] shadow-lg mb-4">
-        <Sparkles size={32} />
+      <div className="w-16 h-16 rounded-2xl bg-[#1B4931] border-2 border-[#C5A059] flex items-center justify-center shadow-lg mb-4 overflow-hidden">
+        <Image
+          src="/logo.png"
+          alt="EQuran AI Assistant"
+          width={64}
+          height={64}
+          className="w-full h-full object-cover"
+        />
       </div>
 
       <h3 className="text-xl font-bold text-[#1B4931] mb-1">

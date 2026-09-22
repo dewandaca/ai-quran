@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
@@ -136,8 +137,15 @@ export default function MobileFrame({
             )}
 
             <Link href="/app" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-2xl bg-[#1B4931] text-[#C5A059] flex items-center justify-center font-bold shadow-md border border-[#C5A059]/40 group-hover:scale-105 transition-transform">
-                <BookOpen size={20} />
+              <div className="w-10 h-10 rounded-2xl bg-[#1B4931] flex items-center justify-center shadow-md border border-[#C5A059]/40 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
+                <Image
+                  src="/logo.png"
+                  alt="Al-Qur'an Companion Logo"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                  priority
+                />
               </div>
               <div>
                 <span className="font-bold text-base tracking-tight text-[#1B4931] block">

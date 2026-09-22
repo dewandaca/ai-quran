@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   BookOpen,
   Sparkles,
@@ -23,8 +24,15 @@ export default function LandingHero() {
       <header className="sticky top-0 z-40 bg-[#FAF6EE]/90 backdrop-blur-md border-b border-[#E8DECD] px-4 sm:px-8 py-3.5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#1B4931] text-[#C5A059] flex items-center justify-center font-bold shadow-md border border-[#C5A059]/40">
-              <BookOpen size={20} />
+            <div className="w-10 h-10 rounded-2xl bg-[#1B4931] flex items-center justify-center shadow-md border border-[#C5A059]/40 overflow-hidden shrink-0">
+              <Image
+                src="/logo.png"
+                alt="Al-Qur'an Companion Logo"
+                width={40}
+                height={40}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
             <div>
               <span className="font-bold text-base tracking-tight text-[#1B4931] block">
@@ -256,8 +264,14 @@ export default function LandingHero() {
             {/* Column 1: Brand & Overview */}
             <div className="space-y-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-[#1B4931] text-[#C5A059] flex items-center justify-center font-bold shadow-md border border-[#C5A059]/40">
-                  <BookOpen size={20} />
+                <div className="w-10 h-10 rounded-2xl bg-[#1B4931] flex items-center justify-center shadow-md border border-[#C5A059]/40 overflow-hidden shrink-0">
+                  <Image
+                    src="/logo.png"
+                    alt="Al-Qur'an Companion Logo"
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <span className="font-bold text-base tracking-tight text-[#1B4931] block">

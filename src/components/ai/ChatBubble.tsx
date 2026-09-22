@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Sparkles, User, Copy, Check } from 'lucide-react';
 import VerseCitationCard from './VerseCitationCard';
 import DuaCitationCard from './DuaCitationCard';
@@ -340,8 +341,14 @@ export default function ChatBubble({
   return (
     <div className="flex items-start gap-2.5 mb-5 animate-in fade-in slide-in-from-bottom-2 duration-150">
       {/* Bot Avatar */}
-      <div className="w-8 h-8 rounded-full bg-[#1B4931] border border-[#C5A059] flex items-center justify-center text-[#C5A059] shrink-0 mt-0.5 shadow-xs">
-        <Sparkles size={16} />
+      <div className="w-8 h-8 rounded-full overflow-hidden border border-[#C5A059] shrink-0 mt-0.5 shadow-xs bg-[#1B4931]">
+        <Image
+          src="/logo.png"
+          alt="EQuran AI"
+          width={32}
+          height={32}
+          className="w-full h-full object-cover"
+        />
       </div>
 
       {/* Bubble Content */}
