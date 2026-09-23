@@ -109,6 +109,9 @@ export default function ShalatPage() {
 
   useEffect(() => {
     loadSchedule();
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
     const interval = setInterval(() => {
       updateNextPrayer();
     }, 1000);
