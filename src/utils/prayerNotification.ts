@@ -51,12 +51,6 @@ export function playNotificationChime(): void {
   }
 }
 
-export interface NotificationResult {
-  success: boolean;
-  status: 'granted' | 'denied' | 'unsupported' | 'error';
-  message: string;
-}
-
 /**
  * Ensures Service Worker (/sw.js) is registered and active
  * Required by Android Chrome and mobile browsers to display notifications
@@ -82,81 +76,47 @@ export async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistr
 }
 
 /**
- * Dispatches a test notification with sound and system banner
- * Works across both mobile phones (via ServiceWorker) and desktop browsers
+ * Dispatches the official prayer adzan notification with prayer name and region
+ * Displays on mobile (via ServiceWorker) and desktop browsers
  */
-export async function sendTestPrayerNotification(kabkota: string): Promise<NotificationResult> {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    playNotificationChime();
-    return {
-      success: false,
-      status: 'unsupported',
-      message: 'Browser Anda tidak mendukung Web Notification API, namun nada pengingat tetap aktif.',
-    };
+export async function sendPrayerNotification(prayerName: string, region: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+    return false;
   }
 
-  let permission = Notification.permission;
-  if (permission === 'default') {
-    try {
-      permission = await Notification.requestPermission();
-    } catch {
-      permission = 'denied';
-    }
-  }
-
-  // Always trigger gentle chime on test trigger
+  // Play gentle chime
   playNotificationChime();
 
-  if (permission === 'denied') {
-    return {
-      success: false,
-      status: 'denied',
-      message: 'Izin notifikasi diblokir di browser. Buka setelan situs di browser HP Anda dan aktifkan "Izin Notifikasi".',
-    };
-  }
-
-  const title = '🕌 Pengingat Waktu Shalat';
+  const title = `🕌 Waktu Shalat ${prayerName} Telah Tiba`;
   const options = {
-    body: `Alhamdulillah! Notifikasi adzan & waktu shalat untuk wilayah ${kabkota || 'Anda'} telah aktif.`,
+    body: `Telah masuk waktu shalat ${prayerName} untuk wilayah ${region || 'Indonesia'} dan sekitarnya. Mari tunaikan shalat tepat waktu.`,
     icon: '/icon.png',
     badge: '/icon.png',
-    tag: 'shalat-test-notification',
+    tag: `shalat-${prayerName.toLowerCase()}`,
     data: {
       url: '/app/shalat',
     },
   };
 
-  // 1. Mobile Priority: Android Chrome requires ServiceWorkerRegistration.showNotification()
+  // 1. Mobile Priority: Android Chrome requires ServiceWorker showNotification
   if ('serviceWorker' in navigator) {
     try {
       const registration = await getOrRegisterServiceWorker();
       if (registration && registration.showNotification) {
         await registration.showNotification(title, options);
-        return {
-          success: true,
-          status: 'granted',
-          message: 'Notifikasi berhasil dikirimkan ke perangkat HP Anda!',
-        };
+        return true;
       }
     } catch (swErr) {
-      console.warn('Service Worker showNotification error, attempting desktop fallback:', swErr);
+      console.warn('Service Worker notification error:', swErr);
     }
   }
 
   // 2. Desktop Fallback: Standard window Notification constructor
   try {
     new Notification(title, options);
-    return {
-      success: true,
-      status: 'granted',
-      message: 'Notifikasi berhasil dikirimkan ke perangkat Anda!',
-    };
+    return true;
   } catch (err) {
-    console.error('Failed to construct window Notification:', err);
-    return {
-      success: false,
-      status: 'error',
-      message: 'Gagal memunculkan banner notifikasi di HP. Pastikan notifikasi browser Chrome/HP tidak disenyapkan di Pengaturan Android/iOS.',
-    };
+    console.warn('Failed to construct window Notification:', err);
+    return false;
   }
 }

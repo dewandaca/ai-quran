@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { fetchJadwalShalat, JadwalShalatItem } from '../services/shalatApi';
+import { sendPrayerNotification, getOrRegisterServiceWorker } from '@/utils/prayerNotification';
 
 export interface NextPrayerInfo {
   name: string;
@@ -105,6 +106,46 @@ function calculateNextPrayer(today: JadwalShalatItem | null): NextPrayerInfo | n
   };
 }
 
+let lastNotifiedDate = '';
+const notifiedPrayers = new Set<string>();
+
+function checkAndNotifyPrayer(
+  today: JadwalShalatItem | null,
+  kabkota: string,
+  settings: PrayerNotificationSettings
+) {
+  if (!today || typeof window === 'undefined') return;
+
+  const now = new Date();
+  const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+  if (lastNotifiedDate !== dateKey) {
+    lastNotifiedDate = dateKey;
+    notifiedPrayers.clear();
+  }
+
+  const currentHH = String(now.getHours()).padStart(2, '0');
+  const currentMM = String(now.getMinutes()).padStart(2, '0');
+  const currentTime = `${currentHH}:${currentMM}`;
+
+  const prayers: { key: keyof PrayerNotificationSettings; name: string; time: string }[] = [
+    { key: 'subuh', name: 'Subuh', time: today.subuh },
+    { key: 'dzuhur', name: 'Dzuhur', time: today.dzuhur },
+    { key: 'ashar', name: 'Ashar', time: today.ashar },
+    { key: 'maghrib', name: 'Maghrib', time: today.maghrib },
+    { key: 'isya', name: 'Isya', time: today.isya },
+  ];
+
+  for (const prayer of prayers) {
+    if (prayer.time && prayer.time === currentTime && settings[prayer.key]) {
+      const prayerId = `${dateKey}-${prayer.key}`;
+      if (!notifiedPrayers.has(prayerId)) {
+        notifiedPrayers.add(prayerId);
+        sendPrayerNotification(prayer.name, kabkota);
+      }
+    }
+  }
+}
+
 export const useShalatStore = create<ShalatState>((set, get) => ({
   provinsi: 'Jawa Barat',
   kabkota: 'Kota Bandung',
@@ -204,11 +245,12 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
     };
     set({ notificationSettings: updated });
 
-    // Request notification permission if enabling
+    // Request notification permission and initialize SW if enabling
     if (updated[prayer] && typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
       }
+      getOrRegisterServiceWorker();
     }
   },
 
@@ -240,8 +282,9 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
   },
 
   updateNextPrayer: () => {
-    const { todaySchedule } = get();
+    const { todaySchedule, kabkota, notificationSettings } = get();
     const next = calculateNextPrayer(todaySchedule);
     set({ nextPrayer: next });
+    checkAndNotifyPrayer(todaySchedule, kabkota, notificationSettings);
   },
 }));

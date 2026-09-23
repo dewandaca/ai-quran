@@ -42,10 +42,13 @@ export default function MobileFrame({
   const { currentTrack, isPlaying, setPlayerModalOpen } = useAudioStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Load stores from localStorage on mount
+  // Load stores from localStorage on mount & register Service Worker
   useEffect(() => {
     useSettingsStore.getState().loadFromStorage();
     useShalatStore.getState().loadFromStorage();
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   }, []);
 
   // Spacebar keyboard listener for laptop/desktop play/pause
