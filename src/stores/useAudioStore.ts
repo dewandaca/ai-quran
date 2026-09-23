@@ -104,7 +104,7 @@ export const useAudioStore = create<AudioState>((set, get) => {
         const { isContinuous, repeatMode, playNext, currentTrack } = get();
         if (
           repeatMode === 'verse' ||
-          (currentTrack?.isFullSurah && (repeatMode === 'surah' || repeatMode === 'verse'))
+          (currentTrack?.isFullSurah && repeatMode === 'surah')
         ) {
           audio.currentTime = 0;
           audio.play().catch(console.error);
