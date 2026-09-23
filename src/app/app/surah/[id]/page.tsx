@@ -30,9 +30,10 @@ import {
   SurahInfo,
   TafsirAyah,
   getAudioUrl,
+  getFullSurahAudioUrl,
 } from '@/services/quranApi';
 import { useSettingsStore } from '@/stores/useSettingsStore';
-import { useAudioStore, QARI_LIST } from '@/stores/useAudioStore';
+import { useAudioStore, QARI_LIST, getFullSurahCdnAudioUrl } from '@/stores/useAudioStore';
 
 export default function SurahDetailPage({
   params,
@@ -67,6 +68,7 @@ export default function SurahDetailPage({
     currentTrack,
     isPlaying,
     playTrack,
+    playFullSurah,
     togglePlayPause,
     selectedQari,
     setSelectedQari,
@@ -261,47 +263,19 @@ export default function SurahDetailPage({
   };
 
   const handlePlayFullSurah = () => {
-    if (!surah || !surah.ayat || surah.ayat.length === 0) return;
+    if (!surah) return;
 
-    const { queue } = useAudioStore.getState();
-    const isFullSurahQueued =
-      currentTrack?.surahNumber === surah.nomor &&
-      queue.length === surah.ayat.length;
-
-    // If currently playing the full surah, toggle pause
-    if (isFullSurahQueued && isPlaying) {
+    if (currentTrack?.surahNumber === surah.nomor && currentTrack.isFullSurah) {
       togglePlayPause();
       return;
     }
 
-    // If paused while the full surah is queued, resume
-    if (isFullSurahQueued && !isPlaying && currentTrack) {
-      togglePlayPause();
-      return;
-    }
+    const audioUrl =
+      surah.audioFull?.[selectedQari] ||
+      getFullSurahAudioUrl(surah.audioFull, selectedQari) ||
+      getFullSurahCdnAudioUrl(surah.nomor, selectedQari);
 
-    // Otherwise, generate the complete surah queue and start playing from Ayah 1
-    const firstAyah = surah.ayat[0];
-    const audioUrl = getAudioUrl(firstAyah.audio, selectedQari);
-
-    const fullQueue = surah.ayat.map((a) => ({
-      surahNumber: surah.nomor,
-      surahName: surah.namaLatin,
-      ayahNumber: a.nomorAyat,
-      audioUrl: getAudioUrl(a.audio, selectedQari),
-      totalAyahs: surah.jumlahAyat,
-    }));
-
-    playTrack(
-      {
-        surahNumber: surah.nomor,
-        surahName: surah.namaLatin,
-        ayahNumber: 1,
-        audioUrl,
-        totalAyahs: surah.jumlahAyat,
-      },
-      fullQueue
-    );
+    playFullSurah(surah.nomor, surah.namaLatin, surah.jumlahAyat, audioUrl);
   };
 
   const handleJumpToAyah = (val: string) => {
@@ -321,7 +295,9 @@ export default function SurahDetailPage({
   };
 
   const isCurrentSurahPlaying =
-    currentTrack?.surahNumber === surah?.nomor && isPlaying;
+    currentTrack?.surahNumber === surah?.nomor &&
+    Boolean(currentTrack?.isFullSurah) &&
+    isPlaying;
 
   const goToPrevSurah = () => {
     if (surahNumber > 1) {

@@ -1,50 +1,34 @@
 'use client';
 
 import React from 'react';
-import { SurahDetail } from '@/services/quranApi';
+import { SurahDetail, getFullSurahAudioUrl } from '@/services/quranApi';
 import { Play, Pause } from 'lucide-react';
-import { useAudioStore } from '@/stores/useAudioStore';
+import { useAudioStore, getFullSurahCdnAudioUrl } from '@/stores/useAudioStore';
 
 interface SurahHeaderCardProps {
   surah: SurahDetail;
 }
 
 export default function SurahHeaderCard({ surah }: SurahHeaderCardProps) {
-  const { currentTrack, isPlaying, playTrack, togglePlayPause, selectedQari } = useAudioStore();
+  const { currentTrack, isPlaying, playFullSurah, togglePlayPause, selectedQari } = useAudioStore();
 
   const isCurrentSurahPlaying =
-    currentTrack?.surahNumber === surah.nomor && isPlaying;
+    currentTrack?.surahNumber === surah.nomor &&
+    Boolean(currentTrack?.isFullSurah) &&
+    isPlaying;
 
   const handlePlayFullSurah = () => {
-    if (currentTrack?.surahNumber === surah.nomor) {
+    if (currentTrack?.surahNumber === surah.nomor && currentTrack.isFullSurah) {
       togglePlayPause();
       return;
     }
 
-    if (surah.ayat && surah.ayat.length > 0) {
-      const firstAyah = surah.ayat[0];
-      const audioUrl =
-        firstAyah.audio[selectedQari] || Object.values(firstAyah.audio)[0] || '';
+    const audioUrl =
+      surah.audioFull?.[selectedQari] ||
+      getFullSurahAudioUrl(surah.audioFull, selectedQari) ||
+      getFullSurahCdnAudioUrl(surah.nomor, selectedQari);
 
-      const queue = surah.ayat.map((a) => ({
-        surahNumber: surah.nomor,
-        surahName: surah.namaLatin,
-        ayahNumber: a.nomorAyat,
-        audioUrl: a.audio[selectedQari] || Object.values(a.audio)[0] || '',
-        totalAyahs: surah.jumlahAyat,
-      }));
-
-      playTrack(
-        {
-          surahNumber: surah.nomor,
-          surahName: surah.namaLatin,
-          ayahNumber: 1,
-          audioUrl,
-          totalAyahs: surah.jumlahAyat,
-        },
-        queue
-      );
-    }
+    playFullSurah(surah.nomor, surah.namaLatin, surah.jumlahAyat, audioUrl);
   };
 
   return (

@@ -22,6 +22,7 @@ export default function FullPlayerModal() {
     isLoading,
     playbackPosition,
     playbackDuration,
+    queue,
     isContinuous,
     repeatMode,
     selectedQari,
@@ -64,7 +65,9 @@ export default function FullPlayerModal() {
               Sedang Memutar
             </span>
             <h3 className="text-base font-bold text-[#1B4931]">
-              {currentTrack.surahName} : Ayat {currentTrack.ayahNumber}
+              {currentTrack.isFullSurah
+                ? `${currentTrack.surahName} (1 Surah Penuh)`
+                : `${currentTrack.surahName} : Ayat ${currentTrack.ayahNumber}`}
             </h3>
           </div>
           <div className="flex items-center gap-2">
@@ -126,6 +129,11 @@ export default function FullPlayerModal() {
               Surah {currentTrack.surahName}
             </h4>
             <p className="text-xs text-[#6B6258] mt-0.5">
+              {currentTrack.isFullSurah && (
+                <span className="inline-block bg-[#1B4931]/10 text-[#1B4931] font-bold px-2.5 py-0.5 rounded-full text-[10px] mr-1.5 border border-[#1B4931]/20">
+                  Full Surah • {currentTrack.totalAyahs} Ayat
+                </span>
+              )}
               Qari: <span className="font-semibold text-[#1B4931]">{qariName}</span>
             </p>
           </div>
@@ -149,11 +157,17 @@ export default function FullPlayerModal() {
 
         {/* Playback Controls */}
         <div className="flex items-center justify-center gap-4 sm:gap-5 py-4">
-          {/* Previous Ayah */}
+          {/* Previous / Seek Backward */}
           <button
-            onClick={playPrevious}
+            onClick={() => {
+              if (currentTrack.isFullSurah && queue.length <= 1) {
+                seekTo(Math.max(0, playbackPosition - 10000));
+              } else {
+                playPrevious();
+              }
+            }}
             className="w-11 h-11 rounded-full bg-white border border-[#E8DECD] flex items-center justify-center text-[#1B4931] hover:bg-[#F3EBDD] transition-colors shadow-xs cursor-pointer active:scale-95"
-            title="Ayat Sebelumnya"
+            title={currentTrack.isFullSurah && queue.length <= 1 ? 'Mundur 10 Detik' : 'Ayat Sebelumnya'}
           >
             <SkipBack size={20} />
           </button>
@@ -174,11 +188,17 @@ export default function FullPlayerModal() {
             )}
           </button>
 
-          {/* Next Ayah */}
+          {/* Next / Seek Forward */}
           <button
-            onClick={playNext}
+            onClick={() => {
+              if (currentTrack.isFullSurah && queue.length <= 1) {
+                seekTo(Math.min(playbackDuration, playbackPosition + 10000));
+              } else {
+                playNext();
+              }
+            }}
             className="w-11 h-11 rounded-full bg-white border border-[#E8DECD] flex items-center justify-center text-[#1B4931] hover:bg-[#F3EBDD] transition-colors shadow-xs cursor-pointer active:scale-95"
-            title="Ayat Selanjutnya"
+            title={currentTrack.isFullSurah && queue.length <= 1 ? 'Maju 10 Detik' : 'Ayat Selanjutnya'}
           >
             <SkipForward size={20} />
           </button>
@@ -213,11 +233,15 @@ export default function FullPlayerModal() {
 
           {/* Jump to surah page */}
           <Link
-            href={`/app/surah/${currentTrack.surahNumber}?ayah=${currentTrack.ayahNumber}#ayah-${currentTrack.ayahNumber}`}
+            href={
+              currentTrack.isFullSurah
+                ? `/app/surah/${currentTrack.surahNumber}`
+                : `/app/surah/${currentTrack.surahNumber}?ayah=${currentTrack.ayahNumber}#ayah-${currentTrack.ayahNumber}`
+            }
             onClick={() => setPlayerModalOpen(false)}
             className="flex items-center gap-1 text-[#1B4931] font-semibold hover:underline"
           >
-            <span>Buka Ayat di Surah</span>
+            <span>{currentTrack.isFullSurah ? 'Buka Surah' : 'Buka Ayat di Surah'}</span>
             <ExternalLink size={13} />
           </Link>
         </div>

@@ -21,7 +21,7 @@ export default function FloatingVinylPlayer() {
             Memutar
           </span>
           <span className="text-xs font-bold text-[#1B4931] truncate max-w-[110px]">
-            {currentTrack.surahName}:{currentTrack.ayahNumber}
+            {currentTrack.isFullSurah ? currentTrack.surahName : `${currentTrack.surahName}:${currentTrack.ayahNumber}`}
           </span>
         </div>
       </div>
@@ -31,7 +31,11 @@ export default function FloatingVinylPlayer() {
         <button
           onClick={() => setPlayerModalOpen(true)}
           className="relative w-14 h-14 rounded-full bg-[#18181b] p-1 shadow-xl border-2 border-[#C5A059] flex items-center justify-center cursor-pointer transition-transform group-hover:scale-105 active:scale-95"
-          title={`${currentTrack.surahName} : Ayat ${currentTrack.ayahNumber}`}
+          title={
+            currentTrack.isFullSurah
+              ? `Surah ${currentTrack.surahName} (Full Surah)`
+              : `${currentTrack.surahName} : Ayat ${currentTrack.ayahNumber}`
+          }
         >
           {/* Vinyl grooves */}
           <div

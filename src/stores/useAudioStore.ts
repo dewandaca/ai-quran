@@ -6,6 +6,7 @@ export interface AudioTrack {
   ayahNumber: number;
   audioUrl: string;
   totalAyahs: number;
+  isFullSurah?: boolean;
 }
 
 export const QARI_LIST = [
@@ -44,6 +45,7 @@ interface AudioState {
   setSelectedQari: (qari: string) => void;
   setPlayerModalOpen: (open: boolean) => void;
   playTrack: (track: AudioTrack, queue?: AudioTrack[]) => void;
+  playFullSurah: (surahNumber: number, surahName: string, totalAyahs: number, audioUrl?: string) => void;
   togglePlayPause: () => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -78,6 +80,12 @@ export function getAyahAudioUrl(surahNumber: number, ayahNumber: number, qariId:
   return `https://cdn.equran.id/audio-partial/${folder}/${s}${a}.mp3`;
 }
 
+export function getFullSurahCdnAudioUrl(surahNumber: number, qariId: string): string {
+  const folder = QARI_FOLDERS[qariId] || 'Misyari-Rasyid-Al-Afasi';
+  const s = surahNumber.toString().padStart(3, '0');
+  return `https://cdn.equran.id/audio-full/${folder}/${s}.mp3`;
+}
+
 export const useAudioStore = create<AudioState>((set, get) => {
   if (typeof window !== 'undefined') {
     const audio = getAudio();
@@ -93,8 +101,11 @@ export const useAudioStore = create<AudioState>((set, get) => {
         });
       };
       audio.onended = () => {
-        const { isContinuous, repeatMode, playNext, currentTrack, queue } = get();
-        if (repeatMode === 'verse') {
+        const { isContinuous, repeatMode, playNext, currentTrack } = get();
+        if (
+          repeatMode === 'verse' ||
+          (currentTrack?.isFullSurah && (repeatMode === 'surah' || repeatMode === 'verse'))
+        ) {
           audio.currentTime = 0;
           audio.play().catch(console.error);
         } else if (isContinuous) {
@@ -141,13 +152,17 @@ export const useAudioStore = create<AudioState>((set, get) => {
       // Update the entire queue to the new qari
       const updatedQueue = queue.map((track) => ({
         ...track,
-        audioUrl: getAyahAudioUrl(track.surahNumber, track.ayahNumber, qari),
+        audioUrl: track.isFullSurah
+          ? getFullSurahCdnAudioUrl(track.surahNumber, qari)
+          : getAyahAudioUrl(track.surahNumber, track.ayahNumber, qari),
       }));
       set({ queue: updatedQueue });
 
       // If there is an active track, switch qari in real-time immediately!
       if (currentTrack) {
-        const newUrl = getAyahAudioUrl(currentTrack.surahNumber, currentTrack.ayahNumber, qari);
+        const newUrl = currentTrack.isFullSurah
+          ? getFullSurahCdnAudioUrl(currentTrack.surahNumber, qari)
+          : getAyahAudioUrl(currentTrack.surahNumber, currentTrack.ayahNumber, qari);
         const updatedTrack = { ...currentTrack, audioUrl: newUrl };
         set({ currentTrack: updatedTrack });
 
@@ -182,7 +197,7 @@ export const useAudioStore = create<AudioState>((set, get) => {
       set({
         currentTrack: track,
         activeSurahNumber: track.surahNumber,
-        activeAyahNumber: track.ayahNumber,
+        activeAyahNumber: track.isFullSurah ? null : track.ayahNumber,
         isLoading: true,
         playbackPosition: 0,
       });
@@ -195,6 +210,20 @@ export const useAudioStore = create<AudioState>((set, get) => {
         console.warn('Audio play failed:', err);
         set({ isPlaying: false, isLoading: false });
       });
+    },
+
+    playFullSurah: (surahNumber, surahName, totalAyahs, customAudioUrl) => {
+      const { selectedQari, playTrack } = get();
+      const audioUrl = customAudioUrl || getFullSurahCdnAudioUrl(surahNumber, selectedQari);
+      const track: AudioTrack = {
+        surahNumber,
+        surahName,
+        ayahNumber: 0,
+        audioUrl,
+        totalAyahs,
+        isFullSurah: true,
+      };
+      playTrack(track, [track]);
     },
 
     togglePlayPause: () => {
@@ -216,7 +245,7 @@ export const useAudioStore = create<AudioState>((set, get) => {
       const currentIndex = queue.findIndex(
         (t) =>
           t.surahNumber === currentTrack.surahNumber &&
-          t.ayahNumber === currentTrack.ayahNumber
+          (currentTrack.isFullSurah ? Boolean(t.isFullSurah) : t.ayahNumber === currentTrack.ayahNumber)
       );
 
       if (currentIndex >= 0 && currentIndex < queue.length - 1) {
@@ -234,7 +263,7 @@ export const useAudioStore = create<AudioState>((set, get) => {
       const currentIndex = queue.findIndex(
         (t) =>
           t.surahNumber === currentTrack.surahNumber &&
-          t.ayahNumber === currentTrack.ayahNumber
+          (currentTrack.isFullSurah ? Boolean(t.isFullSurah) : t.ayahNumber === currentTrack.ayahNumber)
       );
 
       if (currentIndex > 0) {

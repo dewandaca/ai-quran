@@ -51,6 +51,7 @@ export default function AyahRow({
   const [shared, setShared] = useState(false);
 
   const isCurrentPlaying =
+    !currentTrack?.isFullSurah &&
     currentTrack?.surahNumber === surahNumber &&
     currentTrack?.ayahNumber === ayah.nomorAyat &&
     isPlaying;
@@ -62,6 +63,7 @@ export default function AyahRow({
 
   const handlePlayAyah = () => {
     if (
+      !currentTrack?.isFullSurah &&
       currentTrack?.surahNumber === surahNumber &&
       currentTrack?.ayahNumber === ayah.nomorAyat
     ) {

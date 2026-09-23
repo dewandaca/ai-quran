@@ -198,7 +198,9 @@ export default function MobileFrame({
                   className={`text-[#C5A059] ${isPlaying ? 'animate-spin-slow' : ''}`}
                 />
                 <span className="truncate max-w-[100px] sm:max-w-[150px]">
-                  {currentTrack.surahName}:{currentTrack.ayahNumber}
+                  {currentTrack.isFullSurah
+                    ? `${currentTrack.surahName} (Full)`
+                    : `${currentTrack.surahName}:${currentTrack.ayahNumber}`}
                 </span>
               </button>
             )}

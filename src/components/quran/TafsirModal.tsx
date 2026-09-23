@@ -56,6 +56,7 @@ export default function TafsirModal({
 
   // Audio track check for current ayah
   const isCurrentPlaying =
+    !currentTrack?.isFullSurah &&
     currentTrack?.surahNumber === surahNumber &&
     currentTrack?.ayahNumber === ayahNumber &&
     isPlaying;
@@ -64,6 +65,7 @@ export default function TafsirModal({
     if (!currentAyah) return;
 
     if (
+      !currentTrack?.isFullSurah &&
       currentTrack?.surahNumber === surahNumber &&
       currentTrack?.ayahNumber === ayahNumber
     ) {
