@@ -47,7 +47,7 @@ export default function NotificationGuideModal({
               Kenapa popup izin tidak muncul lagi?
             </p>
             <p>
-              Saat Anda pernah menolak/tidak mengizinkan notifikasi sekali saja, kebijakan keamanan browser (Chrome/Safari) secara otomatis **memblokir permanen** popup izin agar situs tidak mengganggu pengguna.
+              Saat Anda memilih <span className="font-semibold text-amber-900">&quot;Jangan Izinkan&quot;</span>, sistem browser menyimpan pilihan tersebut dan menonaktifkan permintaan otomatis agar tidak mengganggu kenyamanan Anda. Anda dapat mengaktifkannya kembali kapan saja melalui langkah berikut:
             </p>
           </div>
 
