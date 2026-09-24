@@ -4,6 +4,7 @@ export interface AICitation {
   surahName: string;
   arabicText?: string;
   translation?: string;
+  tafsirText?: string;
 }
 
 export interface AIDuaCitation {
@@ -25,12 +26,15 @@ export interface AIResponse {
   text: string;
   citations: AICitation[];
   duaCitations?: AIDuaCitation[];
+  engine?: 'gemini' | 'vector';
+  isFallback?: boolean;
 }
 
 export async function chatWithAI(
   userMessage: string,
   onChunk: (chunk: string) => void,
-  conversationHistory: ChatMessage[] = []
+  conversationHistory: ChatMessage[] = [],
+  engine: 'gemini' | 'vector' = 'gemini'
 ): Promise<AIResponse> {
   try {
     const res = await fetch('/api/ai', {
@@ -41,6 +45,7 @@ export async function chatWithAI(
       body: JSON.stringify({
         message: userMessage,
         conversationHistory,
+        engine,
       }),
     });
 

@@ -2,10 +2,11 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Sparkles, User, Copy, Check } from 'lucide-react';
+import { Sparkles, User, Copy, Check, BookOpen } from 'lucide-react';
 import VerseCitationCard from './VerseCitationCard';
 import DuaCitationCard from './DuaCitationCard';
 import { AICitation, AIDuaCitation } from '@/services/aiService';
+import TafsirContentRenderer from '@/components/quran/TafsirContentRenderer';
 
 interface ChatBubbleProps {
   role: 'user' | 'assistant';
@@ -13,6 +14,8 @@ interface ChatBubbleProps {
   isStreaming?: boolean;
   citations?: AICitation[];
   duaCitations?: AIDuaCitation[];
+  engine?: 'gemini' | 'vector';
+  isFallback?: boolean;
 }
 
 function isArabicLine(str: string): boolean {
@@ -102,6 +105,87 @@ function MarkdownRenderer({ content }: { content: string }) {
 
     if (!trimmed) {
       elements.push(<div key={`spacer-${i}`} className="h-2" />);
+      continue;
+    }
+
+    // 0. Structured Tafsir Block (Custom Tafsir Renderer matching the app's Quran Tafsir design)
+    const isTafsirLabel = /^\*\*(?:penjelasan\s*(?:&|dan)?\s*)?(?:kandungan\s*(?:&|dan)?\s*)?tafsir.*?\*\*/i.test(trimmed);
+    const hasTafsirTag = trimmed.includes('[TAFSIR_START]');
+    const nextNonEmpty = lines.slice(i + 1).find((l) => l.trim().length > 0);
+    const nextHasTafsirTag = nextNonEmpty?.includes('[TAFSIR_START]');
+
+    if (hasTafsirTag || isTafsirLabel) {
+      if (isTafsirLabel && nextHasTafsirTag) {
+        // Skip label line so that it doesn't render redundantly above the styled Tafsir card
+        continue;
+      }
+
+      const tafsirLines: string[] = [];
+
+      if (hasTafsirTag) {
+        const afterStart = trimmed.replace(/.*\[TAFSIR_START\]/, '').trim();
+        if (afterStart && !afterStart.includes('[TAFSIR_END]')) {
+          tafsirLines.push(afterStart);
+        }
+        i++;
+        while (i < lines.length && !lines[i].includes('[TAFSIR_END]')) {
+          tafsirLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length && lines[i].includes('[TAFSIR_END]')) {
+          const beforeEnd = lines[i].replace(/\[TAFSIR_END\].*/, '').trim();
+          if (beforeEnd) {
+            tafsirLines.push(beforeEnd);
+          }
+        }
+      } else {
+        const afterLabel = trimmed.replace(/^\*\*(?:penjelasan\s*(?:&|dan)?\s*)?(?:kandungan\s*(?:&|dan)?\s*)?tafsir.*?\*\*\s*[:：]?\s*/i, '').trim();
+        if (afterLabel) {
+          tafsirLines.push(afterLabel);
+        }
+        i++;
+        while (
+          i < lines.length &&
+          !lines[i].trim().startsWith('### ') &&
+          !lines[i].trim().startsWith('## ') &&
+          !lines[i].trim().startsWith('# ') &&
+          !/^\*\*(?:penjelasan\s*(?:&|dan)?\s*)?(?:kandungan\s*(?:&|dan)?\s*)?tafsir.*?\*\*/i.test(lines[i].trim())
+        ) {
+          tafsirLines.push(lines[i]);
+          i++;
+        }
+        i--; // step back since loop counter increments
+      }
+
+      const tafsirRawText = tafsirLines.join('\n').trim();
+      if (tafsirRawText) {
+        elements.push(
+          <div
+            key={`tafsir-card-${i}`}
+            className="my-3.5 p-4 sm:p-5 bg-[#FAF6EE] border border-[#C5A059]/40 rounded-2xl shadow-xs space-y-3"
+          >
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#E8DECD]">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[#1B4931]/10 flex items-center justify-center text-[#1B4931]">
+                  <BookOpen size={13} />
+                </div>
+                <div>
+                  <span className="text-xs sm:text-sm font-bold text-[#1B4931] tracking-wide block">
+                    Penjelasan Tafsir Al-Qur&apos;an (Kemenag RI)
+                  </span>
+                  <span className="text-[10px] text-[#8C8276]">
+                    Rujukan Tafsir Tahlili &amp; Tematik Resmi
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <TafsirContentRenderer teks={tafsirRawText} fontSizeClass="text-xs sm:text-sm" />
+            </div>
+          </div>
+        );
+      }
       continue;
     }
 
@@ -321,6 +405,8 @@ export default function ChatBubble({
   isStreaming = false,
   citations = [],
   duaCitations = [],
+  engine,
+  isFallback = false,
 }: ChatBubbleProps) {
   const [copied, setCopied] = React.useState(false);
 
@@ -372,13 +458,26 @@ export default function ChatBubble({
       <div className="flex-1 min-w-0">
         <div className="bg-white border border-[#E8DECD] rounded-2xl rounded-tl-xs p-4 sm:p-5 shadow-xs relative">
           {/* Header */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-[#1B4931] tracking-wide flex items-center gap-1.5">
-              <span>EQuran AI Assistant</span>
-              <span className="text-[10px] text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-full font-medium">
-                Shahih
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-[#1B4931] tracking-wide">
+                EQuran AI Assistant
               </span>
-            </span>
+              {engine === 'vector' ? (
+                <span className="text-[10px] text-emerald-800 bg-emerald-100/80 border border-emerald-300/70 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                  <span>⚡ Vector Search</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-[#8C6D2B] bg-[#C5A059]/15 border border-[#C5A059]/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                  <span>✨ Gemini AI</span>
+                </span>
+              )}
+              {isFallback && (
+                <span className="text-[9px] text-amber-800 bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded-md font-medium">
+                  Auto Fallback
+                </span>
+              )}
+            </div>
             {content && !isStreaming && (
               <button
                 onClick={handleCopy}

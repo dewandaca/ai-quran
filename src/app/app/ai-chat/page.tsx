@@ -14,11 +14,14 @@ import {
   History,
   PanelLeftClose,
   PanelLeft,
+  Zap,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import ChatBubble from '@/components/ai/ChatBubble';
 import { AICitation } from '@/services/aiService';
-import { useChatStore, THINKING_STEPS } from '@/stores/useChatStore';
+import { useChatStore, THINKING_STEPS, THINKING_STEPS_VECTOR } from '@/stores/useChatStore';
 
 const QUESTION_POOL = [
   'Apakah boleh menikah dalam keadaan miskin?',
@@ -63,6 +66,8 @@ export default function AIChatPage() {
     generatingRoomId,
     thinkingStep,
     lastCompletedRoomId,
+    aiEngine,
+    setAiEngine,
     createRoom,
     deleteRoom,
     setActiveRoom,
@@ -78,9 +83,27 @@ export default function AIChatPage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [engineDropdownOpen, setEngineDropdownOpen] = useState(false);
+  const engineDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close engine dropdown on click outside
+  useEffect(() => {
+    if (!engineDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (engineDropdownRef.current && !engineDropdownRef.current.contains(e.target as Node)) {
+        setEngineDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [engineDropdownOpen]);
 
   const activeRoom = getActiveRoom();
   const messages = activeRoom?.messages || [];
@@ -318,10 +341,42 @@ export default function AIChatPage() {
       <h3 className="text-xl font-bold text-[#1B4931] mb-1">
         EQuran AI Assistant
       </h3>
-      <p className="text-xs text-[#6B6258] max-w-sm leading-relaxed mb-6">
+      <p className="text-xs text-[#6B6258] max-w-sm leading-relaxed mb-4">
         Tanyakan apa saja seputar Al-Qur&apos;an, tafsir, hukum, dan doa
         sehari-hari yang berlandaskan ayat shahih.
       </p>
+
+      {/* Engine Selector Pill Switcher */}
+      <div className="mb-6 inline-flex items-center p-1 bg-white border border-[#E8DECD] rounded-full shadow-xs gap-1">
+        <button
+          type="button"
+          onClick={() => setAiEngine('gemini')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
+            aiEngine === 'gemini'
+              ? 'bg-[#1B4931] text-white shadow-xs'
+              : 'text-[#6B6258] hover:text-[#1B4931]'
+          }`}
+        >
+          <Sparkles size={13} className={aiEngine === 'gemini' ? 'text-[#C5A059]' : ''} />
+          <span>Gemini AI</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAiEngine('vector')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
+            aiEngine === 'vector'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-[#6B6258] hover:text-emerald-700'
+          }`}
+        >
+          <Zap size={13} className={aiEngine === 'vector' ? 'fill-white' : 'text-emerald-600'} />
+          <span>EQuran Vector</span>
+          <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${aiEngine === 'vector' ? 'bg-white text-emerald-800' : 'bg-emerald-100 text-emerald-800'}`}>
+            Bebas Limit
+          </span>
+        </button>
+      </div>
 
       {/* Quick Prompt Suggestions with Refresh */}
       <div className="w-full max-w-md space-y-2.5 text-left">
@@ -360,23 +415,24 @@ export default function AIChatPage() {
   );
 
   // ──────────── THINKING INDICATOR ────────────
+  const currentThinkingSteps = aiEngine === 'vector' ? THINKING_STEPS_VECTOR : THINKING_STEPS;
   const ThinkingIndicator = (
     <div className="flex items-start gap-2.5 mb-5 animate-in fade-in slide-in-from-bottom-2 duration-150">
       <div className="w-8 h-8 rounded-full bg-[#1B4931] border border-[#C5A059] flex items-center justify-center text-[#C5A059] shrink-0 mt-0.5 shadow-xs animate-pulse">
-        <Sparkles size={16} />
+        {aiEngine === 'vector' ? <Zap size={16} className="fill-[#C5A059]" /> : <Sparkles size={16} />}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="bg-white border border-[#E8DECD] rounded-2xl rounded-tl-xs p-4 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[11px] font-bold text-[#1B4931]">
-              EQuran AI Assistant
+              EQuran AI Assistant {aiEngine === 'vector' ? '(EQuran Vector Search)' : '(Gemini AI)'}
             </span>
             <span className="w-2 h-2 rounded-full bg-[#C5A059] animate-ping" />
           </div>
 
           <div className="space-y-2 py-1">
-            {THINKING_STEPS.map((stepText, stepIdx) => {
+            {currentThinkingSteps.map((stepText, stepIdx) => {
               const isDone = stepIdx < thinkingStep;
               const isCurrent = stepIdx === thinkingStep;
               return (
@@ -444,7 +500,7 @@ export default function AIChatPage() {
         {/* ══════ CHAT MAIN AREA ══════ */}
         <div className="flex-1 flex flex-col h-full min-w-0 bg-[#FAF6EE] overflow-hidden">
           {/* Top Subheader Bar */}
-          <div className="h-12 sm:h-13 border-b border-[#E8DECD] px-4 flex items-center justify-between shrink-0 bg-[#FAF6EE]/90 backdrop-blur-xs">
+          <div className="relative z-30 h-12 sm:h-13 border-b border-[#E8DECD] px-4 flex items-center justify-between shrink-0 bg-[#FAF6EE]">
             <div className="flex items-center gap-2 min-w-0">
               {/* Desktop toggle button (only visible when sidebar is closed, to reopen it) */}
               {!desktopSidebarOpen && (
@@ -478,15 +534,135 @@ export default function AIChatPage() {
               </div>
             </div>
 
-            {/* Right: Shortcut to new chat */}
-            <button
-              onClick={handleNewChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#1B4931] bg-[#EAE1D2] hover:bg-[#E0D5C3] border border-[#E8DECD] transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
-              title="Chat Baru"
-            >
-              <Plus size={14} />
-              <span className="hidden sm:inline">Chat Baru</span>
-            </button>
+            {/* Right: Engine Switcher and Shortcut to new chat */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Engine Selector Dropdown */}
+              <div ref={engineDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setEngineDropdownOpen((prev) => !prev)}
+                  aria-expanded={engineDropdownOpen}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-2xs select-none ${
+                    aiEngine === 'vector'
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100/80'
+                      : 'bg-white text-[#1B4931] border-[#E8DECD] hover:bg-[#FAF6EE]'
+                  }`}
+                  title="Pilih Engine AI / Mode Pencarian"
+                >
+                  {aiEngine === 'vector' ? (
+                    <>
+                      <Zap size={13} className="text-emerald-600 fill-emerald-600 shrink-0" />
+                      <span className="font-bold">EQuran Vector</span>
+                      <span className="hidden sm:inline text-[9px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
+                        Bebas Limit
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} className="text-[#C5A059] shrink-0" />
+                      <span className="font-bold">Gemini AI</span>
+                    </>
+                  )}
+                  <ChevronDown
+                    size={12}
+                    className={`text-[#8C8276] shrink-0 transition-transform duration-200 ${
+                      engineDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                {engineDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] bg-white border border-[#E8DECD] rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-2.5 py-1.5 border-b border-[#E8DECD]/60 mb-1.5">
+                      <p className="text-[11px] font-bold text-[#1B4931]">
+                        Pilih Mesin AI / Pencarian
+                      </p>
+                      <p className="text-[10px] text-[#8C8276]">
+                        Ganti ke EQuran Vector bila Gemini limit atau high demand.
+                      </p>
+                    </div>
+
+                    {/* Option: Gemini */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiEngine('gemini');
+                        setEngineDropdownOpen(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl transition cursor-pointer flex items-start gap-2.5 mb-1 ${
+                        aiEngine === 'gemini'
+                          ? 'bg-[#1B4931]/10 border border-[#1B4931]/20'
+                          : 'hover:bg-[#FAF6EE] border border-transparent'
+                      }`}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-[#FAF6EE] border border-[#E8DECD] flex items-center justify-center shrink-0 mt-0.5 text-[#C5A059]">
+                        <Sparkles size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#1B4931]">
+                            Google Gemini AI
+                          </span>
+                          {aiEngine === 'gemini' && (
+                            <Check size={14} className="text-[#1B4931]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[#6B6258] leading-tight mt-0.5">
+                          Dialog interaktif &amp; penalaran mendalam. (Bisa terkena kuota/high demand).
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Option: EQuran Vector */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiEngine('vector');
+                        setEngineDropdownOpen(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl transition cursor-pointer flex items-start gap-2.5 ${
+                        aiEngine === 'vector'
+                          ? 'bg-emerald-50 border border-emerald-300'
+                          : 'hover:bg-[#FAF6EE] border border-transparent'
+                      }`}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100/80 border border-emerald-300 flex items-center justify-center shrink-0 mt-0.5 text-emerald-700">
+                        <Zap size={15} className="fill-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-emerald-950">
+                              EQuran Vector Search
+                            </span>
+                            <span className="text-[9px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
+                              Bebas Limit
+                            </span>
+                          </div>
+                          {aiEngine === 'vector' && (
+                            <Check size={14} className="text-emerald-700" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-emerald-700/80 leading-tight mt-0.5">
+                          Pencarian semantik langsung ke database EQuran.id. Sangat cepat, stabil &amp; tanpa batas kuota.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Shortcut to new chat */}
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#1B4931] bg-[#EAE1D2] hover:bg-[#E0D5C3] border border-[#E8DECD] transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                title="Chat Baru"
+              >
+                <Plus size={14} />
+                <span className="hidden sm:inline">Chat Baru</span>
+              </button>
+            </div>
           </div>
 
           {/* Background Generation Indicator Banner if generating in another room */}
@@ -535,6 +711,8 @@ export default function AIChatPage() {
                         isStreaming={msg.isStreaming}
                         citations={msg.citations as AICitation[]}
                         duaCitations={msg.duaCitations}
+                        engine={msg.engine}
+                        isFallback={msg.isFallback}
                       />
                     );
                   })}
@@ -547,6 +725,32 @@ export default function AIChatPage() {
           {/* Bottom Input Area */}
           <div className="shrink-0 px-3 sm:px-6 pb-3 pt-2 bg-[#FAF6EE] border-t border-[#E8DECD]/50">
             <div className="max-w-4xl xl:max-w-5xl mx-auto w-full">
+              {/* Quick Engine Switcher Bar */}
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  {aiEngine === 'vector' ? (
+                    <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <Zap size={11} className="text-emerald-600 fill-emerald-600 shrink-0" />
+                      <span>Mode: <strong>EQuran Vector</strong> (Bebas Limit)</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-[#6B6258] bg-[#EAE1D2]/60 border border-[#E8DECD] px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <Sparkles size={11} className="text-[#C5A059] shrink-0" />
+                      <span>Mode: <strong>Gemini AI</strong></span>
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAiEngine(aiEngine === 'gemini' ? 'vector' : 'gemini')}
+                  className="text-[11px] font-bold text-[#1B4931] hover:text-[#C5A059] flex items-center gap-1 transition cursor-pointer"
+                  title="Beralih engine"
+                >
+                  <span>Pindah ke {aiEngine === 'gemini' ? '⚡ EQuran Vector' : '✨ Gemini AI'}</span>
+                </button>
+              </div>
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -557,7 +761,11 @@ export default function AIChatPage() {
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder="Tanyakan sesuatu pada EQuran AI (cth: abbasa ayat 3)..."
+                  placeholder={
+                    aiEngine === 'vector'
+                      ? 'Pencarian Semantik EQuran Vector (cth: sabar dan sholat, sedekah)...'
+                      : 'Tanyakan sesuatu pada EQuran AI (cth: abbasa ayat 3)...'
+                  }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   disabled={isGenerating}

@@ -6,6 +6,7 @@ import {
   resolveSurahNumber,
   SURAH_NAME_TO_NUMBER,
 } from '@/services/groundingService';
+import { processWithEQuranVector } from '@/services/equranVectorService';
 
 export const maxDuration = 60; // Izinkan durasi eksekusi hingga 60 detik (1 menit)
 
@@ -151,7 +152,7 @@ function cleanAssistantReply(text: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, conversationHistory = [] } = await req.json();
+    const { message, conversationHistory = [], engine = 'gemini' } = await req.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -184,16 +185,23 @@ export async function POST(req: NextRequest) {
                   },
                 ],
                 duaCitations: [],
+                engine,
               });
             }
           }
         }
       } catch (directErr) {
-        console.warn('Direct verse lookup failed, proceeding to LLM:', directErr);
+        console.warn('Direct verse lookup failed, proceeding:', directErr);
       }
     }
 
-    // 2. Parallel Vector Search via pgvector (Ayat + Doa)
+    // 2. Opsi Langsung: EQuran Vector Search API (https://equran.id/apidev/vector)
+    if (engine === 'vector') {
+      const vectorResult = await processWithEQuranVector(message);
+      return NextResponse.json(vectorResult);
+    }
+
+    // 3. Parallel Vector Search via pgvector (Ayat + Doa) untuk Gemini Context
     const embedding = await generateEmbedding(message);
     let verseResults: VectorSearchResult[] = [];
     let duaResults: DuaSearchResult[] = [];
@@ -381,15 +389,12 @@ export async function POST(req: NextRequest) {
 
     const systemPromptWithContext = `${SYSTEM_PROMPT}\n\n${fullContext}`;
 
-    // Text Generation: Murni menggunakan Google Gemini (gemini-2.5-flash & gemini-3.6-flash)
+    // Text Generation: Menggunakan Google Gemini dengan fallback otomatis ke EQuran Vector Search
     const geminiKey = process.env.GEMINI_API_KEY || process.env.next_gemini_api_key;
     if (!geminiKey) {
-      console.error('GEMINI_API_KEY belum disetel di environment.');
-      return NextResponse.json({
-        text: 'Maaf, konfigurasi GEMINI_API_KEY belum disetel di server.',
-        citations: [],
-        duaCitations: [],
-      });
+      console.warn('GEMINI_API_KEY belum disetel. Mengalihkan otomatis ke EQuran Vector Search.');
+      const fallbackResult = await processWithEQuranVector(message, { isFallback: true });
+      return NextResponse.json(fallbackResult);
     }
 
     const geminiContents: { role: string; parts: { text: string }[] }[] = [];
@@ -456,6 +461,7 @@ export async function POST(req: NextRequest) {
               text: groundedText,
               citations,
               duaCitations,
+              engine: 'gemini',
             });
           }
         } else {
@@ -467,12 +473,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If all models failed or are busy, return error message with NO citations
-    return NextResponse.json({
-      text: 'Maaf, layanan AI sedang sibuk. Silakan periksa koneksi internet Anda atau tanyakan kembali sesaat lagi.',
-      citations: [],
-      duaCitations: [],
-    });
+    // Jika seluruh model Gemini limit / high demand, alihkan otomatis ke EQuran Vector Search
+    console.warn('Seluruh model Gemini sibuk / rate-limited. Mengalihkan otomatis ke EQuran Vector Search...');
+    const fallbackVector = await processWithEQuranVector(message, { isFallback: true });
+    return NextResponse.json(fallbackVector);
   } catch (error) {
     console.error('API /api/ai error:', error);
     return NextResponse.json(

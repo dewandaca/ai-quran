@@ -11,6 +11,8 @@ export interface ChatMessageItem {
   citations?: AICitation[];
   duaCitations?: AIDuaCitation[];
   isStreaming?: boolean;
+  engine?: 'gemini' | 'vector';
+  isFallback?: boolean;
   timestamp: number;
 }
 
@@ -29,10 +31,21 @@ export const THINKING_STEPS = [
   'Menyusun jawaban yang ringkas & penuh hikmah...',
 ];
 
+export const THINKING_STEPS_VECTOR = [
+  'Menghubungkan ke EQuran Vector API...',
+  'Mencari kemiripan semantik ayat & tafsir...',
+  'Mengambil teks Arab, Latin, dan terjemahan...',
+  'Menyusun rujukan ayat & doa terpercaya...',
+];
+
 interface ChatStore {
   rooms: ChatRoom[];
   activeRoomId: string | null;
   sidebarOpen: boolean;
+
+  // AI Engine selector
+  aiEngine: 'gemini' | 'vector';
+  setAiEngine: (engine: 'gemini' | 'vector') => void;
 
   // Background AI generation states
   isGenerating: boolean;
@@ -63,6 +76,7 @@ interface ChatStore {
 }
 
 const STORAGE_KEY = 'equran-chat-history';
+const ENGINE_STORAGE_KEY = 'equran-ai-engine';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -112,6 +126,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeRoomId: null,
   sidebarOpen: false,
 
+  aiEngine: 'gemini',
+  setAiEngine: (engine) => {
+    set({ aiEngine: engine });
+    try {
+      localStorage.setItem(ENGINE_STORAGE_KEY, engine);
+    } catch {}
+  },
+
   isGenerating: false,
   generatingRoomId: null,
   generatingQuestion: null,
@@ -131,9 +153,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const currentActive = get().activeRoomId;
     const resolvedActive = currentActive || data.activeRoomId || (data.rooms.length > 0 ? data.rooms[0].id : null);
 
+    let savedEngine: 'gemini' | 'vector' = 'gemini';
+    try {
+      const storedEngine = localStorage.getItem(ENGINE_STORAGE_KEY);
+      if (storedEngine === 'vector' || storedEngine === 'gemini') {
+        savedEngine = storedEngine;
+      }
+    } catch {}
+
     set({
       rooms: data.rooms,
       activeRoomId: resolvedActive,
+      aiEngine: savedEngine,
       isLoaded: true,
     });
   },
@@ -290,6 +321,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       lastCompletedRoomId: null,
     });
 
+    const currentEngine = get().aiEngine;
+    const currentSteps = currentEngine === 'vector' ? THINKING_STEPS_VECTOR : THINKING_STEPS;
+
     // Thinking step progression timer
     const thinkingInterval = setInterval(() => {
       set((s) => {
@@ -299,12 +333,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
         return {
           thinkingStep:
-            s.thinkingStep < THINKING_STEPS.length - 1
+            s.thinkingStep < currentSteps.length - 1
               ? s.thinkingStep + 1
               : s.thinkingStep,
         };
       });
-    }, 1100);
+    }, 900);
 
     try {
       const history = get().getConversationHistory(roomId).filter(
@@ -321,7 +355,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             isStreaming: true,
           });
         },
-        history
+        history,
+        currentEngine
       );
 
       clearInterval(thinkingInterval);
@@ -331,6 +366,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         isStreaming: false,
         citations: result.citations,
         duaCitations: result.duaCitations,
+        engine: result.engine || currentEngine,
+        isFallback: result.isFallback,
       });
 
       set({
