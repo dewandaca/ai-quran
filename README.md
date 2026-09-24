@@ -93,7 +93,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # Google Gemini API (LLM & Embeddings)
 GEMINI_API_KEY=your-gemini-api-key
-NEXT_PUBLIC_GEMINI_API_KEY=your-gemini-api-key
+next_gemini_api_key=your-gemini-api-key
 
 # Opsional: OpenAI / Groq Fallback
 OPENAI_API_KEY=your-openai-api-key

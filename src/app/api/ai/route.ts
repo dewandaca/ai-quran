@@ -108,7 +108,7 @@ function parseDirectVerseQuery(query: string): { surahNumber: number; ayahNumber
 
 async function generateEmbedding(text: string): Promise<number[]> {
   // 1. Primary: Google Gemini (gemini-embedding-001, 1536 dim) - cepat, gratis, dan cocok dengan index database
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.next_gemini_api_key;
   if (geminiKey) {
     try {
       const res = await fetch(
@@ -382,7 +382,7 @@ export async function POST(req: NextRequest) {
     const systemPromptWithContext = `${SYSTEM_PROMPT}\n\n${fullContext}`;
 
     // Text Generation: Murni menggunakan Google Gemini (gemini-2.5-flash & gemini-3.6-flash)
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.next_gemini_api_key;
     if (!geminiKey) {
       console.error('GEMINI_API_KEY belum disetel di environment.');
       return NextResponse.json({
