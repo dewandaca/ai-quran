@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import CityPickerModal from '@/components/home/CityPickerModal';
+import NotificationGuideModal from '@/components/common/NotificationGuideModal';
 import { useShalatStore } from '@/stores/useShalatStore';
 
 function getHijriYear(): string {
@@ -64,6 +65,7 @@ export default function ShalatPage() {
   const [copiedDoa, setCopiedDoa] = useState(false);
   const [testingNotif, setTestingNotif] = useState(false);
   const [notifBannerDismissed, setNotifBannerDismissed] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
 
   const handleTestNotification = async () => {
     setTestingNotif(true);
@@ -220,7 +222,14 @@ export default function ShalatPage() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-              {permissionStatus !== 'denied' && (
+              {permissionStatus === 'denied' ? (
+                <button
+                  onClick={() => setGuideModalOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95"
+                >
+                  Cara Buka Blokir
+                </button>
+              ) : (
                 <button
                   onClick={() => requestPermission()}
                   className="px-4 py-2 rounded-xl bg-[#1B4931] hover:bg-[#143828] text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95"
@@ -596,6 +605,12 @@ export default function ShalatPage() {
         onSelectCity={(prov, city) => setCity(prov, city)}
         onDetectGps={() => detectLocation()}
         isDetectingGps={isDetectingLocation}
+      />
+
+      {/* Guide modal if notifications were blocked */}
+      <NotificationGuideModal
+        visible={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
       />
     </MobileFrame>
   );

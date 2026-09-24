@@ -6,9 +6,11 @@ import MobileFrame from '@/components/layout/MobileFrame';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useAudioStore, QARI_LIST } from '@/stores/useAudioStore';
 import { useShalatStore, PrayerNotificationSettings } from '@/stores/useShalatStore';
+import NotificationGuideModal from '@/components/common/NotificationGuideModal';
 
 export default function SettingsPage() {
   const [testingNotif, setTestingNotif] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
   const {
     notificationSettings,
     permissionStatus,
@@ -232,7 +234,14 @@ export default function SettingsPage() {
                     Pengingat suara adzan di desktop &amp; mobile
                   </span>
                 </div>
-                {permissionStatus !== 'granted' ? (
+                {permissionStatus === 'denied' ? (
+                  <button
+                    onClick={() => setGuideModalOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer transition shadow-xs"
+                  >
+                    Buka Panduan
+                  </button>
+                ) : permissionStatus !== 'granted' ? (
                   <button
                     onClick={() => requestPermission()}
                     className="px-3 py-1.5 rounded-xl bg-[#1B4931] hover:bg-[#143828] text-white text-xs font-bold cursor-pointer transition shadow-xs"
@@ -323,6 +332,11 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <NotificationGuideModal
+        visible={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+      />
     </MobileFrame>
   );
 }
