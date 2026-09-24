@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import FloatingVinylPlayer from '@/components/audio/FloatingVinylPlayer';
 import FullPlayerModal from '@/components/audio/FullPlayerModal';
+import FloatingAIStatus from '@/components/ai/FloatingAIStatus';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useShalatStore } from '@/stores/useShalatStore';
+import { useChatStore } from '@/stores/useChatStore';
 
 interface MobileFrameProps {
   children: React.ReactNode;
@@ -40,6 +42,7 @@ export default function MobileFrame({
   const pathname = usePathname();
   const router = useRouter();
   const { currentTrack, isPlaying, setPlayerModalOpen } = useAudioStore();
+  const { isGenerating: isAIGenerating, lastCompletedRoomId: aiCompletedRoomId } = useChatStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Load stores from localStorage on mount, load prayer schedule & register Service Worker
@@ -48,6 +51,7 @@ export default function MobileFrame({
     const shalatStore = useShalatStore.getState();
     shalatStore.loadFromStorage();
     shalatStore.loadSchedule();
+    useChatStore.getState().loadFromStorage();
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -113,6 +117,8 @@ export default function MobileFrame({
       href: '/app/ai-chat',
       icon: Sparkles,
       isActive: pathname.startsWith('/app/ai-chat'),
+      isGenerating: isAIGenerating,
+      hasNotification: !!aiCompletedRoomId,
     },
     {
       label: 'Bookmark',
@@ -179,14 +185,26 @@ export default function MobileFrame({
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer relative ${
                     item.isActive
                       ? 'bg-[#1B4931] text-white shadow-xs'
                       : 'text-[#6B6258] hover:text-[#1B4931] hover:bg-white/60'
                   }`}
                 >
-                  <Icon size={16} />
+                  <Icon
+                    size={16}
+                    className={item.isGenerating ? 'animate-spin-slow text-[#C5A059]' : ''}
+                  />
                   <span>{item.label}</span>
+                  {item.isGenerating && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A059] opacity-80" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C5A059]" />
+                    </span>
+                  )}
+                  {!item.isGenerating && item.hasNotification && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
                 </Link>
               );
             })}
@@ -235,14 +253,30 @@ export default function MobileFrame({
                   key={item.label}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                  className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition ${
                     item.isActive
                       ? 'bg-[#1B4931] text-white'
                       : 'text-[#6B6258] hover:bg-[#F3EBDD]'
                   }`}
                 >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-3">
+                    <Icon
+                      size={18}
+                      className={item.isGenerating ? 'animate-spin-slow text-[#C5A059]' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.isGenerating && (
+                    <span className="text-[10px] font-semibold text-[#C5A059] bg-[#1B4931] px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059] animate-ping" />
+                      Memproses...
+                    </span>
+                  )}
+                  {!item.isGenerating && item.hasNotification && (
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Jawaban Siap!
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -275,6 +309,9 @@ export default function MobileFrame({
       <FloatingVinylPlayer />
       <FullPlayerModal />
 
+      {/* FLOATING AI GENERATION STATUS & NOTIFICATION */}
+      <FloatingAIStatus />
+
       {/* MOBILE BOTTOM NAVIGATION BAR (for easy one-hand mobile navigation) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#E8DECD] py-1.5 px-2 flex items-center justify-around shadow-lg">
         {navItems.slice(0, 5).map((item) => {
@@ -283,20 +320,32 @@ export default function MobileFrame({
             <Link
               key={item.label}
               href={item.href}
-              className={`flex flex-col items-center py-1 px-2 rounded-xl transition cursor-pointer ${
+              className={`flex flex-col items-center py-1 px-2 rounded-xl transition cursor-pointer relative ${
                 item.isActive
                   ? 'text-[#1B4931] font-bold'
                   : 'text-[#9C9286] hover:text-[#2C2621]'
               }`}
             >
               <div
-                className={`w-9 h-7.5 flex items-center justify-center rounded-xl transition ${
+                className={`w-9 h-7.5 relative flex items-center justify-center rounded-xl transition ${
                   item.isActive
                     ? 'bg-[#1B4931]/10 text-[#1B4931]'
                     : 'text-inherit'
                 }`}
               >
-                <Icon size={19} />
+                <Icon
+                  size={19}
+                  className={item.isGenerating ? 'animate-spin-slow text-[#C5A059]' : ''}
+                />
+                {item.isGenerating && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A059] opacity-80" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#C5A059] border border-white" />
+                  </span>
+                )}
+                {!item.isGenerating && item.hasNotification && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white" />
+                )}
               </div>
               <span className="text-[10px] mt-0.5">{item.label}</span>
             </Link>

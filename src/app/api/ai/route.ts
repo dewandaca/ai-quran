@@ -414,7 +414,13 @@ export async function POST(req: NextRequest) {
 
     geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-    const geminiModels = ['gemini-2.5-flash', 'gemini-3.6-flash'];
+    const geminiModels =
+      [
+        'gemini-2.5-flash',
+        'gemini-3.6-flash',
+        'gemini-3.7-flash',
+        'gemini-3.8-flash',
+      ];
     for (const model of geminiModels) {
       try {
         const response = await fetch(

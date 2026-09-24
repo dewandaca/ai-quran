@@ -17,8 +17,8 @@ import {
 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import ChatBubble from '@/components/ai/ChatBubble';
-import { chatWithAI, AICitation } from '@/services/aiService';
-import { useChatStore, ChatMessageItem } from '@/stores/useChatStore';
+import { AICitation } from '@/services/aiService';
+import { useChatStore, THINKING_STEPS } from '@/stores/useChatStore';
 
 const QUESTION_POOL = [
   'Apakah boleh menikah dalam keadaan miskin?',
@@ -37,13 +37,6 @@ const QUESTION_POOL = [
   'Penjelasan tentang rezeki tak disangka dalam QS. At-Talaq',
   'Bagaimana cara memaafkan orang yang menyakiti kita menurut Al-Qur\'an?',
   'Pahala menuntut ilmu dan mengajarkannya dalam Islam',
-];
-
-const THINKING_STEPS = [
-  'Memahami pertanyaan Anda...',
-  'Mengecek database ayat & tafsir Al-Qur\'an...',
-  'Mencocokkan rujukan dalil yang shahih...',
-  'Menyusun jawaban yang ringkas & penuh hikmah...',
 ];
 
 function formatTimeAgo(ts: number): string {
@@ -66,21 +59,22 @@ export default function AIChatPage() {
     rooms,
     activeRoomId,
     sidebarOpen,
+    isGenerating,
+    generatingRoomId,
+    thinkingStep,
+    lastCompletedRoomId,
     createRoom,
     deleteRoom,
     setActiveRoom,
     toggleSidebar,
     setSidebarOpen,
-    addMessage,
-    updateMessage,
+    sendMessage,
+    clearLastCompletedRoom,
     getActiveRoom,
-    getConversationHistory,
     loadFromStorage,
   } = useChatStore();
 
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [thinkingStep, setThinkingStep] = useState(0);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -94,7 +88,14 @@ export default function AIChatPage() {
   // Load chat history from localStorage on mount
   useEffect(() => {
     loadFromStorage();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadFromStorage]);
+
+  // Clear completed notification when viewing the active room
+  useEffect(() => {
+    if (lastCompletedRoomId && lastCompletedRoomId === activeRoomId) {
+      clearLastCompletedRoom();
+    }
+  }, [activeRoomId, lastCompletedRoomId, clearLastCompletedRoom]);
 
   const refreshSuggestions = useCallback(() => {
     const shuffled = [...QUESTION_POOL].sort(() => 0.5 - Math.random());
@@ -104,20 +105,6 @@ export default function AIChatPage() {
   useEffect(() => {
     refreshSuggestions();
   }, [refreshSuggestions]);
-
-  // Multi-stage thinking animation
-  useEffect(() => {
-    if (!loading) {
-      setThinkingStep(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setThinkingStep((prev) =>
-        prev < THINKING_STEPS.length - 1 ? prev + 1 : prev
-      );
-    }, 1100);
-    return () => clearInterval(interval);
-  }, [loading]);
 
   // Focus input & scroll to bottom when switching rooms
   useEffect(() => {
@@ -141,77 +128,11 @@ export default function AIChatPage() {
 
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || input).trim();
-    if (!text || loading) return;
+    if (!text || isGenerating) return;
 
     setInput('');
-
-    // Auto-create room if none is active
-    let roomId = activeRoomId;
-    if (!roomId) {
-      roomId = createRoom();
-    }
-
-    const userMsgId = `user-${Date.now()}`;
-    const assistantMsgId = `assistant-${Date.now()}`;
-
-    const userMsg: ChatMessageItem = {
-      id: userMsgId,
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-    };
-
-    const assistantMsg: ChatMessageItem = {
-      id: assistantMsgId,
-      role: 'assistant',
-      content: '',
-      isStreaming: true,
-      citations: [],
-      duaCitations: [],
-      timestamp: Date.now(),
-    };
-
-    addMessage(roomId, userMsg);
-    addMessage(roomId, assistantMsg);
-    setLoading(true);
     scrollToBottom();
-
-    try {
-      const history = getConversationHistory(roomId).filter(
-        (m) => m.content !== '' // exclude the empty streaming placeholder
-      );
-
-      let accumulated = '';
-      const result = await chatWithAI(
-        text,
-        (chunk) => {
-          accumulated = chunk;
-          updateMessage(roomId!, assistantMsgId, {
-            content: accumulated,
-            isStreaming: true,
-          });
-          // Do not auto-scroll during chunks so user can read smoothly from the top
-        },
-        history
-      );
-
-      updateMessage(roomId, assistantMsgId, {
-        content: result.text,
-        isStreaming: false,
-        citations: result.citations,
-        duaCitations: result.duaCitations,
-      });
-    } catch (err) {
-      console.error('Chat error:', err);
-      updateMessage(roomId, assistantMsgId, {
-        content:
-          'Terjadi kendala saat memproses jawaban. Silakan coba lagi.',
-        isStreaming: false,
-      });
-    } finally {
-      setLoading(false);
-      // Do not auto-scroll after output completes so user stays at the top of the answer
-    }
+    await sendMessage(text, activeRoomId || undefined);
   };
 
   const handleNewChat = () => {
@@ -302,6 +223,7 @@ export default function AIChatPage() {
         ) : (
           rooms.map((room) => {
             const isActive = room.id === activeRoomId;
+            const isRoomGenerating = isGenerating && generatingRoomId === room.id;
             return (
               <div
                 key={room.id}
@@ -323,7 +245,15 @@ export default function AIChatPage() {
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs truncate">{room.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs truncate">{room.title}</p>
+                      {isRoomGenerating && (
+                        <span className="shrink-0 flex items-center gap-1 text-[9px] font-bold text-[#C5A059] bg-black/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                          <Sparkles size={9} className="animate-spin-slow" />
+                          <span>Menjawab</span>
+                        </span>
+                      )}
+                    </div>
                     <p
                       className={`text-[10px] truncate mt-0.5 ${
                         isActive ? 'text-white/70' : 'text-[#9C9286]'
@@ -559,6 +489,20 @@ export default function AIChatPage() {
             </button>
           </div>
 
+          {/* Background Generation Indicator Banner if generating in another room */}
+          {isGenerating && generatingRoomId && generatingRoomId !== activeRoomId && (
+            <div
+              onClick={() => setActiveRoom(generatingRoomId)}
+              className="bg-[#1B4931]/10 border-b border-[#1B4931]/20 px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-[#1B4931]/15 transition shrink-0"
+            >
+              <div className="flex items-center gap-2 text-xs text-[#1B4931] font-semibold">
+                <Sparkles size={14} className="text-[#C5A059] animate-spin-slow" />
+                <span>AI sedang menyusun jawaban di percakapan lain</span>
+              </div>
+              <span className="text-[11px] font-bold text-[#1B4931] underline">Buka Percakapan →</span>
+            </div>
+          )}
+
           {/* Messages or Empty State */}
           <div
             ref={messagesContainerRef}
@@ -583,16 +527,16 @@ export default function AIChatPage() {
                       );
                     }
 
-                      return (
-                        <ChatBubble
-                          key={msg.id}
-                          role={msg.role}
-                          content={msg.content}
-                          isStreaming={msg.isStreaming}
-                          citations={msg.citations as AICitation[]}
-                          duaCitations={msg.duaCitations}
-                        />
-                      );
+                    return (
+                      <ChatBubble
+                        key={msg.id}
+                        role={msg.role}
+                        content={msg.content}
+                        isStreaming={msg.isStreaming}
+                        citations={msg.citations as AICitation[]}
+                        duaCitations={msg.duaCitations}
+                      />
+                    );
                   })}
                   <div ref={messagesEndRef} />
                 </div>
@@ -616,14 +560,14 @@ export default function AIChatPage() {
                   placeholder="Tanyakan sesuatu pada EQuran AI (cth: abbasa ayat 3)..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  disabled={loading}
+                  disabled={isGenerating}
                   className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-[#2C2621] outline-hidden placeholder:text-[#9C9286]"
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading}
+                  disabled={!input.trim() || isGenerating}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
-                    input.trim() && !loading
+                    input.trim() && !isGenerating
                       ? 'bg-[#1B4931] text-white hover:bg-[#143828] shadow-sm'
                       : 'bg-[#FAF6EE] text-[#9C9286] cursor-not-allowed'
                   }`}

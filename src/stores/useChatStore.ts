@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { AICitation, AIDuaCitation } from '@/services/aiService';
+import { chatWithAI, AICitation, AIDuaCitation } from '@/services/aiService';
 
 // ─── Types ───────────────────────────────────────────────────────────
 export interface ChatMessageItem {
@@ -22,10 +22,25 @@ export interface ChatRoom {
   messages: ChatMessageItem[];
 }
 
+export const THINKING_STEPS = [
+  'Memahami pertanyaan Anda...',
+  'Mengecek database ayat & tafsir Al-Qur\'an...',
+  'Mencocokkan rujukan dalil yang shahih...',
+  'Menyusun jawaban yang ringkas & penuh hikmah...',
+];
+
 interface ChatStore {
   rooms: ChatRoom[];
   activeRoomId: string | null;
   sidebarOpen: boolean;
+
+  // Background AI generation states
+  isGenerating: boolean;
+  generatingRoomId: string | null;
+  generatingQuestion: string | null;
+  thinkingStep: number;
+  lastCompletedRoomId: string | null;
+  isLoaded: boolean;
 
   // Actions
   createRoom: () => string;
@@ -37,12 +52,14 @@ interface ChatStore {
   // Message actions
   addMessage: (roomId: string, message: ChatMessageItem) => void;
   updateMessage: (roomId: string, messageId: string, updates: Partial<ChatMessageItem>) => void;
+  sendMessage: (text: string, targetRoomId?: string) => Promise<void>;
+  clearLastCompletedRoom: () => void;
 
   // Helpers
   getActiveRoom: () => ChatRoom | null;
   getConversationHistory: (roomId: string) => { role: 'user' | 'assistant'; content: string }[];
   clearAllRooms: () => void;
-  loadFromStorage: () => void;
+  loadFromStorage: (force?: boolean) => void;
 }
 
 const STORAGE_KEY = 'equran-chat-history';
@@ -95,9 +112,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeRoomId: null,
   sidebarOpen: false,
 
-  loadFromStorage: () => {
+  isGenerating: false,
+  generatingRoomId: null,
+  generatingQuestion: null,
+  thinkingStep: 0,
+  lastCompletedRoomId: null,
+  isLoaded: false,
+
+  loadFromStorage: (force = false) => {
+    // Prevent wiping in-memory state if already loaded or currently generating
+    if (get().isLoaded && !force) return;
+    if (get().isGenerating && !force) {
+      set({ isLoaded: true });
+      return;
+    }
+
     const data = loadStorage();
-    set({ rooms: data.rooms, activeRoomId: data.activeRoomId });
+    const currentActive = get().activeRoomId;
+    const resolvedActive = currentActive || data.activeRoomId || (data.rooms.length > 0 ? data.rooms[0].id : null);
+
+    set({
+      rooms: data.rooms,
+      activeRoomId: resolvedActive,
+      isLoaded: true,
+    });
   },
 
   createRoom: () => {
@@ -121,13 +159,25 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       state.activeRoomId === roomId
         ? updatedRooms[0]?.id || null
         : state.activeRoomId;
-    set({ rooms: updatedRooms, activeRoomId: newActiveId });
+
+    const isGenThisRoom = state.generatingRoomId === roomId;
+
+    set({
+      rooms: updatedRooms,
+      activeRoomId: newActiveId,
+      ...(isGenThisRoom ? { isGenerating: false, generatingRoomId: null, generatingQuestion: null } : {}),
+      ...(state.lastCompletedRoomId === roomId ? { lastCompletedRoomId: null } : {}),
+    });
     saveToStorage(updatedRooms, newActiveId);
   },
 
   setActiveRoom: (roomId) => {
     set({ activeRoomId: roomId, sidebarOpen: false });
     saveToStorage(get().rooms, roomId);
+  },
+
+  clearLastCompletedRoom: () => {
+    set({ lastCompletedRoomId: null });
   },
 
   toggleSidebar: () => {
@@ -171,7 +221,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     set({ rooms: updatedRooms });
-    // Only save non-streaming messages
+    // Only save non-streaming messages immediately to avoid persisting empty streaming state
     if (!message.isStreaming) {
       saveToStorage(updatedRooms, state.activeRoomId);
     }
@@ -196,6 +246,118 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
+  sendMessage: async (text: string, targetRoomId?: string) => {
+    const state = get();
+    if (state.isGenerating) return;
+
+    const trimmedText = text.trim();
+    if (!trimmedText) return;
+
+    // Auto-create room if none is active
+    let roomId = targetRoomId || state.activeRoomId;
+    if (!roomId) {
+      roomId = get().createRoom();
+    }
+
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+
+    const userMsg: ChatMessageItem = {
+      id: userMsgId,
+      role: 'user',
+      content: trimmedText,
+      timestamp: Date.now(),
+    };
+
+    const assistantMsg: ChatMessageItem = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+      citations: [],
+      duaCitations: [],
+      timestamp: Date.now(),
+    };
+
+    get().addMessage(roomId, userMsg);
+    get().addMessage(roomId, assistantMsg);
+
+    set({
+      isGenerating: true,
+      generatingRoomId: roomId,
+      generatingQuestion: trimmedText,
+      thinkingStep: 0,
+      lastCompletedRoomId: null,
+    });
+
+    // Thinking step progression timer
+    const thinkingInterval = setInterval(() => {
+      set((s) => {
+        if (!s.isGenerating) {
+          clearInterval(thinkingInterval);
+          return s;
+        }
+        return {
+          thinkingStep:
+            s.thinkingStep < THINKING_STEPS.length - 1
+              ? s.thinkingStep + 1
+              : s.thinkingStep,
+        };
+      });
+    }, 1100);
+
+    try {
+      const history = get().getConversationHistory(roomId).filter(
+        (m) => m.content !== ''
+      );
+
+      let accumulated = '';
+      const result = await chatWithAI(
+        trimmedText,
+        (chunk) => {
+          accumulated = chunk;
+          get().updateMessage(roomId!, assistantMsgId, {
+            content: accumulated,
+            isStreaming: true,
+          });
+        },
+        history
+      );
+
+      clearInterval(thinkingInterval);
+
+      get().updateMessage(roomId, assistantMsgId, {
+        content: result.text,
+        isStreaming: false,
+        citations: result.citations,
+        duaCitations: result.duaCitations,
+      });
+
+      set({
+        isGenerating: false,
+        generatingRoomId: null,
+        generatingQuestion: null,
+        thinkingStep: 0,
+        lastCompletedRoomId: roomId,
+      });
+    } catch (err) {
+      console.error('Chat error in useChatStore:', err);
+      clearInterval(thinkingInterval);
+
+      get().updateMessage(roomId, assistantMsgId, {
+        content: 'Terjadi kendala saat memproses jawaban. Silakan coba lagi.',
+        isStreaming: false,
+      });
+
+      set({
+        isGenerating: false,
+        generatingRoomId: null,
+        generatingQuestion: null,
+        thinkingStep: 0,
+      });
+    }
+  },
+
   getActiveRoom: () => {
     const state = get();
     if (!state.activeRoomId) return null;
@@ -211,7 +373,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   clearAllRooms: () => {
-    set({ rooms: [], activeRoomId: null });
+    set({
+      rooms: [],
+      activeRoomId: null,
+      isGenerating: false,
+      generatingRoomId: null,
+      generatingQuestion: null,
+      lastCompletedRoomId: null,
+    });
     saveToStorage([], null);
   },
 }));

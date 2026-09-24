@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fetchJadwalShalat, fetchKabKota, JadwalShalatItem } from '../services/shalatApi';
+import { fetchJadwalShalat, fetchKabKota, fetchProvinsi, JadwalShalatItem } from '../services/shalatApi';
 import {
   sendPrayerNotification,
   sendTestNotification,
@@ -186,6 +186,149 @@ function checkAndNotifyPrayer(
   }
 }
 
+function normalizeCoreName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(kota|kabupaten|kab\.?)\s+/i, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchProvinsi(
+  address: Record<string, string>,
+  displayName: string,
+  validProvinces: string[]
+): string {
+  const state = address.state || '';
+  const city = address.city || '';
+  const iso = address['ISO3166-2-lvl4'] || '';
+  const combined = `${state} ${city} ${displayName} ${iso}`.toLowerCase();
+
+  // Special provincial aliases
+  if (combined.includes('jakarta') || iso === 'ID-JK') return 'DKI Jakarta';
+  if (combined.includes('yogyakarta') || combined.includes('jogja') || iso === 'ID-YO') return 'D.I. Yogyakarta';
+  if (combined.includes('aceh') || iso === 'ID-AC') return 'Aceh';
+  if (combined.includes('bangka') || iso === 'ID-BB') return 'Kepulauan Bangka Belitung';
+
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const stateClean = clean(state);
+
+  // Exact match
+  const exact = validProvinces.find((p) => clean(p) === stateClean);
+  if (exact) return exact;
+
+  // Partial match
+  const partial = validProvinces.find((p) => {
+    const pClean = clean(p);
+    return stateClean.includes(pClean) || pClean.includes(stateClean);
+  });
+  if (partial) return partial;
+
+  // Fallback scan across all valid provinces in combined string
+  for (const p of validProvinces) {
+    if (combined.includes(p.toLowerCase())) return p;
+  }
+
+  return 'DKI Jakarta';
+}
+
+function matchKabKota(validCities: string[], address: Record<string, string>): string {
+  if (!validCities || validCities.length === 0) return 'Kota Bandung';
+
+  const cityField = address.city || '';
+  const countyField = address.county || '';
+  const townField = address.town || '';
+  const districtField = address.city_district || '';
+  const municipalityField = address.municipality || '';
+  const suburbField = address.suburb || '';
+
+  // Determine preference: Kota vs Kab
+  // In Nominatim / OpenStreetMap:
+  // - Autonomous cities (Kota) populate address.city
+  // - Regencies (Kabupaten) populate address.county and have address.city undefined
+  const hasCityField = Boolean(cityField);
+  const countyIsKab = /kabupaten|kab\b/i.test(countyField);
+  const countyIsKota = /\bkota\b/i.test(countyField);
+  const cityIsKota = /\bkota\b/i.test(cityField) || (!countyIsKab && hasCityField);
+
+  let preferredType: 'kota' | 'kab' | null = null;
+  if (cityIsKota && !countyIsKab) {
+    preferredType = 'kota';
+  } else if (countyIsKab || (!hasCityField && countyField)) {
+    preferredType = 'kab';
+  } else if (countyIsKota) {
+    preferredType = 'kota';
+  }
+
+  // Ordered candidate list from most specific city/county name
+  const rawCandidates: string[] = [];
+  if (cityField) rawCandidates.push(cityField);
+  if (countyField) rawCandidates.push(countyField);
+  if (municipalityField) rawCandidates.push(municipalityField);
+  if (districtField) rawCandidates.push(districtField);
+  if (townField) rawCandidates.push(townField);
+  if (suburbField) rawCandidates.push(suburbField);
+
+  let bestCity = validCities[0];
+  let bestScore = -1;
+
+  for (const vc of validCities) {
+    const isKota = vc.startsWith('Kota ');
+    const isKab = vc.startsWith('Kab. ');
+    const vcCore = normalizeCoreName(vc);
+
+    let score = 0;
+
+    for (let i = 0; i < rawCandidates.length; i++) {
+      const cand = rawCandidates[i];
+      const candCore = normalizeCoreName(cand);
+      const candWeight = (rawCandidates.length - i) * 15;
+
+      // Exact match with prefix (e.g. 'Kota Tangerang' === 'Kota Tangerang')
+      if (cand.toLowerCase() === vc.toLowerCase()) {
+        score = Math.max(score, candWeight + 2000);
+      }
+
+      // Exact core match without prefix (e.g. 'tangerang' === 'tangerang')
+      if (candCore === vcCore) {
+        let matchScore = candWeight + 1000;
+        if (preferredType === 'kota' && isKota) matchScore += 300;
+        if (preferredType === 'kab' && isKab) matchScore += 300;
+        if (preferredType === 'kota' && isKab) matchScore -= 300;
+        if (preferredType === 'kab' && isKota) matchScore -= 300;
+        score = Math.max(score, matchScore);
+      }
+
+      // Substring match
+      if (candCore.length > 3 && vcCore.length > 3) {
+        if (vcCore === candCore || vcCore.startsWith(candCore + ' ') || candCore.startsWith(vcCore + ' ')) {
+          let matchScore = candWeight + 500;
+          if (preferredType === 'kota' && isKota) matchScore += 150;
+          if (preferredType === 'kab' && isKab) matchScore += 150;
+          if (preferredType === 'kota' && isKab) matchScore -= 150;
+          if (preferredType === 'kab' && isKota) matchScore -= 150;
+          score = Math.max(score, matchScore);
+        } else if (vcCore.includes(candCore) || candCore.includes(vcCore)) {
+          let matchScore = candWeight + 300;
+          if (preferredType === 'kota' && isKota) matchScore += 100;
+          if (preferredType === 'kab' && isKab) matchScore += 100;
+          if (preferredType === 'kota' && isKab) matchScore -= 100;
+          if (preferredType === 'kab' && isKota) matchScore -= 100;
+          score = Math.max(score, matchScore);
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCity = vc;
+    }
+  }
+
+  return bestCity;
+}
+
 export const useShalatStore = create<ShalatState>((set, get) => ({
   provinsi: 'Jawa Barat',
   kabkota: 'Kota Bandung',
@@ -242,12 +385,16 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
 
     set({ isDetectingLocation: true });
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          timeout: 10000,
-          maximumAge: 60000,
-        });
-      });
+      const [position, allProvinces] = await Promise.all([
+        new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10000,
+            maximumAge: 0,
+            enableHighAccuracy: true,
+          });
+        }),
+        fetchProvinsi(),
+      ]);
 
       const { latitude, longitude } = position.coords;
       try {
@@ -256,37 +403,15 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
         );
         if (res.ok) {
           const data = await res.json();
-          const address = data.address || {};
-          const state = address.state || 'DKI Jakarta';
-          const rawCity =
-            address.city || address.town || address.county || address.city_district || 'Jakarta';
+          const address = (data.address || {}) as Record<string, string>;
+          const matchedProvinsi = matchProvinsi(address, data.display_name || '', allProvinces);
 
           // Fetch valid cities in this province to guarantee a 100% exact match in equran.id
-          const validCities = await fetchKabKota(state);
-          let matchedKabkota = validCities[0] || 'Kota Bandung';
-
-          if (validCities.length > 0) {
-            const clean = (s: string) =>
-              s
-                .toLowerCase()
-                .replace(/^(kota|kabupaten|kab\.?)\s+/i, '')
-                .replace(/[^a-z0-9]/g, '');
-            const targetClean = clean(rawCity);
-
-            const directMatch = validCities.find((c) => clean(c) === targetClean);
-            const partialMatch = validCities.find(
-              (c) => clean(c).includes(targetClean) || targetClean.includes(clean(c))
-            );
-
-            if (directMatch) {
-              matchedKabkota = directMatch;
-            } else if (partialMatch) {
-              matchedKabkota = partialMatch;
-            }
-          }
+          const validCities = await fetchKabKota(matchedProvinsi);
+          const matchedKabkota = matchKabKota(validCities, address);
 
           set({
-            provinsi: state,
+            provinsi: matchedProvinsi,
             kabkota: matchedKabkota,
             isGpsLocation: true,
             isDetectingLocation: false,
@@ -297,7 +422,7 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
             localStorage.setItem(
               SHALAT_STORAGE_KEY,
               JSON.stringify({
-                provinsi: state,
+                provinsi: matchedProvinsi,
                 kabkota: matchedKabkota,
                 notificationSettings: current.notificationSettings,
               })
