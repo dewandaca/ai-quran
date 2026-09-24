@@ -1,12 +1,21 @@
 'use client';
 
-import React from 'react';
-import { Type, Volume2, Info, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Type, Volume2, Info, Check, Bell, BellRing } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useAudioStore, QARI_LIST } from '@/stores/useAudioStore';
+import { useShalatStore, PrayerNotificationSettings } from '@/stores/useShalatStore';
 
 export default function SettingsPage() {
+  const [testingNotif, setTestingNotif] = useState(false);
+  const {
+    notificationSettings,
+    permissionStatus,
+    toggleNotification,
+    requestPermission,
+    testNotification,
+  } = useShalatStore();
   const {
     arabicFontSize,
     setArabicFontSize,
@@ -189,6 +198,93 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Section: Notifikasi Sholat */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5">
+                <Bell size={16} className="text-[#1B4931]" />
+                <h3 className="text-xs font-bold text-[#6B6258] uppercase tracking-wider">
+                  Notifikasi &amp; Pengingat Shalat
+                </h3>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                permissionStatus === 'granted'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : permissionStatus === 'denied'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-zinc-100 text-zinc-700'
+              }`}>
+                {permissionStatus === 'granted'
+                  ? '● Aktif'
+                  : permissionStatus === 'denied'
+                  ? '● Diblokir'
+                  : '● Belum Izin'}
+              </span>
+            </div>
+
+            <div className="bg-white rounded-3xl p-5 border border-[#E8DECD] shadow-xs space-y-4 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E8DECD]/60">
+                <div>
+                  <span className="font-bold text-[#2C2621] block">
+                    Izin Notifikasi Browser
+                  </span>
+                  <span className="text-[11px] text-[#6B6258]">
+                    Pengingat suara adzan di desktop &amp; mobile
+                  </span>
+                </div>
+                {permissionStatus !== 'granted' ? (
+                  <button
+                    onClick={() => requestPermission()}
+                    className="px-3 py-1.5 rounded-xl bg-[#1B4931] hover:bg-[#143828] text-white text-xs font-bold cursor-pointer transition shadow-xs"
+                  >
+                    Izinkan
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setTestingNotif(true);
+                      await testNotification();
+                      setTimeout(() => setTestingNotif(false), 2000);
+                    }}
+                    disabled={testingNotif}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FAF6EE] text-[#1B4931] border border-[#E8DECD] text-xs font-bold cursor-pointer transition hover:bg-[#FAF6EE]/80"
+                  >
+                    <Volume2 size={13} className="text-[#C5A059]" />
+                    <span>{testingNotif ? 'Menguji...' : 'Uji Notifikasi'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Individual Prayer Toggles */}
+              <div className="space-y-3 pt-1">
+                {(['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'] as (keyof PrayerNotificationSettings)[]).map((pKey) => {
+                  const label = pKey.charAt(0).toUpperCase() + pKey.slice(1);
+                  const isEnabled = notificationSettings[pKey];
+                  return (
+                    <div key={pKey} className="flex items-center justify-between">
+                      <span className="font-medium text-[#2C2621]">
+                        Waktu Sholat {label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleNotification(pKey)}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          isEnabled ? 'bg-[#1B4931]' : 'bg-[#E8DECD]'
+                        }`}
+                      >
+                        <span
+                          className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-0.5 transition-transform ${
+                            isEnabled ? 'left-5.5' : 'left-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           {/* Section 3: App Info */}
           <div className="space-y-3">
             <div className="flex items-center gap-1.5 px-1">
@@ -220,7 +316,7 @@ export default function SettingsPage() {
               <div className="flex justify-between">
                 <span>Model AI</span>
                 <span className="font-medium text-[#2C2621]">
-                  RAG pgvector + Gemini/Groq
+                  RAG pgvector + Gemini
                 </span>
               </div>
             </div>

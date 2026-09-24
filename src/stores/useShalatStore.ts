@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import { fetchJadwalShalat, JadwalShalatItem } from '../services/shalatApi';
-import { sendPrayerNotification, getOrRegisterServiceWorker } from '@/utils/prayerNotification';
+import { fetchJadwalShalat, fetchKabKota, JadwalShalatItem } from '../services/shalatApi';
+import {
+  sendPrayerNotification,
+  sendTestNotification,
+  getOrRegisterServiceWorker,
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+  syncScheduleToServiceWorker,
+  NotificationStatus,
+} from '@/utils/prayerNotification';
 
 export interface NextPrayerInfo {
   name: string;
@@ -26,6 +34,7 @@ interface ShalatState {
   todaySchedule: JadwalShalatItem | null;
   nextPrayer: NextPrayerInfo | null;
   notificationSettings: PrayerNotificationSettings;
+  permissionStatus: NotificationStatus;
   isLoading: boolean;
   isDetectingLocation: boolean;
   isGpsLocation: boolean;
@@ -34,13 +43,16 @@ interface ShalatState {
   // Actions
   setCity: (provinsi: string, kabkota: string) => Promise<void>;
   detectLocation: () => Promise<boolean>;
-  toggleNotification: (prayer: keyof PrayerNotificationSettings) => void;
+  toggleNotification: (prayer: keyof PrayerNotificationSettings) => Promise<void>;
+  requestPermission: () => Promise<NotificationStatus>;
+  testNotification: () => Promise<boolean>;
   loadSchedule: () => Promise<void>;
   updateNextPrayer: () => void;
   loadFromStorage: () => void;
 }
 
 const SHALAT_STORAGE_KEY = 'quran_companion_shalat';
+const NOTIFIED_STORAGE_KEY = 'quran_companion_notified_prayers';
 
 const DEFAULT_NOTIFICATIONS: PrayerNotificationSettings = {
   subuh: true,
@@ -106,8 +118,27 @@ function calculateNextPrayer(today: JadwalShalatItem | null): NextPrayerInfo | n
   };
 }
 
-let lastNotifiedDate = '';
-const notifiedPrayers = new Set<string>();
+function getNotifiedPrayers(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const saved = localStorage.getItem(NOTIFIED_STORAGE_KEY);
+    if (saved) {
+      return new Set(JSON.parse(saved));
+    }
+  } catch {
+    // Ignore
+  }
+  return new Set();
+}
+
+function saveNotifiedPrayers(set: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(NOTIFIED_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch {
+    // Ignore
+  }
+}
 
 function checkAndNotifyPrayer(
   today: JadwalShalatItem | null,
@@ -118,14 +149,7 @@ function checkAndNotifyPrayer(
 
   const now = new Date();
   const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-  if (lastNotifiedDate !== dateKey) {
-    lastNotifiedDate = dateKey;
-    notifiedPrayers.clear();
-  }
-
-  const currentHH = String(now.getHours()).padStart(2, '0');
-  const currentMM = String(now.getMinutes()).padStart(2, '0');
-  const currentTime = `${currentHH}:${currentMM}`;
+  const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
   const prayers: { key: keyof PrayerNotificationSettings; name: string; time: string }[] = [
     { key: 'subuh', name: 'Subuh', time: today.subuh },
@@ -135,14 +159,30 @@ function checkAndNotifyPrayer(
     { key: 'isya', name: 'Isya', time: today.isya },
   ];
 
+  const notified = getNotifiedPrayers();
+  let changed = false;
+
   for (const prayer of prayers) {
-    if (prayer.time && prayer.time === currentTime && settings[prayer.key]) {
-      const prayerId = `${dateKey}-${prayer.key}`;
-      if (!notifiedPrayers.has(prayerId)) {
-        notifiedPrayers.add(prayerId);
-        sendPrayerNotification(prayer.name, kabkota);
-      }
+    if (!prayer.time || prayer.time === '--:--' || !settings[prayer.key]) continue;
+
+    const [h, m] = prayer.time.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) continue;
+
+    const prayerTotalMinutes = h * 60 + m;
+    const diff = currentTotalMinutes - prayerTotalMinutes;
+
+    // Trigger if current time is within [prayerTime, prayerTime + 10 minutes]
+    // Ensures notifications fire reliably even if background tab is throttled
+    const prayerId = `${dateKey}-${prayer.key}`;
+    if (diff >= 0 && diff <= 10 && !notified.has(prayerId)) {
+      notified.add(prayerId);
+      changed = true;
+      sendPrayerNotification(prayer.name, kabkota);
     }
+  }
+
+  if (changed) {
+    saveNotifiedPrayers(notified);
   }
 }
 
@@ -153,6 +193,7 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
   todaySchedule: null,
   nextPrayer: null,
   notificationSettings: DEFAULT_NOTIFICATIONS,
+  permissionStatus: 'default',
   isLoading: false,
   isDetectingLocation: false,
   isGpsLocation: false,
@@ -161,12 +202,19 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
   loadFromStorage: () => {
     if (typeof window === 'undefined') return;
     try {
+      const perm = getNotificationPermissionStatus();
       const saved = localStorage.getItem(SHALAT_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.provinsi && parsed.kabkota) {
-          set({ provinsi: parsed.provinsi, kabkota: parsed.kabkota });
-        }
+        set({
+          ...(parsed.provinsi && parsed.kabkota
+            ? { provinsi: parsed.provinsi, kabkota: parsed.kabkota }
+            : {}),
+          ...(parsed.notificationSettings ? { notificationSettings: parsed.notificationSettings } : {}),
+          permissionStatus: perm,
+        });
+      } else {
+        set({ permissionStatus: perm });
       }
     } catch {
       // Ignore
@@ -176,7 +224,15 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
   setCity: async (provinsi: string, kabkota: string) => {
     set({ provinsi, kabkota, isGpsLocation: false });
     if (typeof window !== 'undefined') {
-      localStorage.setItem(SHALAT_STORAGE_KEY, JSON.stringify({ provinsi, kabkota }));
+      const current = get();
+      localStorage.setItem(
+        SHALAT_STORAGE_KEY,
+        JSON.stringify({
+          provinsi,
+          kabkota,
+          notificationSettings: current.notificationSettings,
+        })
+      );
     }
     await get().loadSchedule();
   },
@@ -202,11 +258,31 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
           const data = await res.json();
           const address = data.address || {};
           const state = address.state || 'DKI Jakarta';
-          const cityOrCounty = address.city || address.town || address.county || address.city_district || 'Kota Jakarta Pusat';
+          const rawCity =
+            address.city || address.town || address.county || address.city_district || 'Jakarta';
 
-          let matchedKabkota = cityOrCounty;
-          if (!matchedKabkota.startsWith('Kota ') && !matchedKabkota.startsWith('Kab. ')) {
-            matchedKabkota = `Kota ${matchedKabkota}`;
+          // Fetch valid cities in this province to guarantee a 100% exact match in equran.id
+          const validCities = await fetchKabKota(state);
+          let matchedKabkota = validCities[0] || 'Kota Bandung';
+
+          if (validCities.length > 0) {
+            const clean = (s: string) =>
+              s
+                .toLowerCase()
+                .replace(/^(kota|kabupaten|kab\.?)\s+/i, '')
+                .replace(/[^a-z0-9]/g, '');
+            const targetClean = clean(rawCity);
+
+            const directMatch = validCities.find((c) => clean(c) === targetClean);
+            const partialMatch = validCities.find(
+              (c) => clean(c).includes(targetClean) || targetClean.includes(clean(c))
+            );
+
+            if (directMatch) {
+              matchedKabkota = directMatch;
+            } else if (partialMatch) {
+              matchedKabkota = partialMatch;
+            }
           }
 
           set({
@@ -217,9 +293,14 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
           });
 
           if (typeof window !== 'undefined') {
+            const current = get();
             localStorage.setItem(
               SHALAT_STORAGE_KEY,
-              JSON.stringify({ provinsi: state, kabkota: matchedKabkota })
+              JSON.stringify({
+                provinsi: state,
+                kabkota: matchedKabkota,
+                notificationSettings: current.notificationSettings,
+              })
             );
           }
 
@@ -237,25 +318,67 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
     return false;
   },
 
-  toggleNotification: (prayer: keyof PrayerNotificationSettings) => {
-    const { notificationSettings } = get();
+  requestPermission: async () => {
+    const status = await requestNotificationPermission();
+    set({ permissionStatus: status });
+    return status;
+  },
+
+  testNotification: async () => {
+    const { kabkota } = get();
+    const success = await sendTestNotification(kabkota);
+    const perm = getNotificationPermissionStatus();
+    set({ permissionStatus: perm });
+    return success;
+  },
+
+  toggleNotification: async (prayer: keyof PrayerNotificationSettings) => {
+    const { notificationSettings, provinsi, kabkota, todaySchedule } = get();
+    const willEnable = !notificationSettings[prayer];
     const updated = {
       ...notificationSettings,
-      [prayer]: !notificationSettings[prayer],
+      [prayer]: willEnable,
     };
     set({ notificationSettings: updated });
 
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        SHALAT_STORAGE_KEY,
+        JSON.stringify({
+          provinsi,
+          kabkota,
+          notificationSettings: updated,
+        })
+      );
+    }
+
     // Request notification permission and initialize SW if enabling
-    if (updated[prayer] && typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission();
+    if (willEnable && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        const perm = await requestNotificationPermission();
+        set({ permissionStatus: perm });
       }
-      getOrRegisterServiceWorker();
+      await getOrRegisterServiceWorker();
+    }
+
+    // Sync updated settings to service worker
+    if (todaySchedule) {
+      syncScheduleToServiceWorker(
+        {
+          subuh: todaySchedule.subuh,
+          dzuhur: todaySchedule.dzuhur,
+          ashar: todaySchedule.ashar,
+          maghrib: todaySchedule.maghrib,
+          isya: todaySchedule.isya,
+        },
+        kabkota,
+        updated
+      );
     }
   },
 
   loadSchedule: async () => {
-    const { provinsi, kabkota } = get();
+    const { provinsi, kabkota, notificationSettings } = get();
     set({ isLoading: true, error: null });
 
     try {
@@ -273,6 +396,21 @@ export const useShalatStore = create<ShalatState>((set, get) => ({
           nextPrayer,
           isLoading: false,
         });
+
+        // Sync schedule to Service Worker for background notifications
+        if (todayItem) {
+          syncScheduleToServiceWorker(
+            {
+              subuh: todayItem.subuh,
+              dzuhur: todayItem.dzuhur,
+              ashar: todayItem.ashar,
+              maghrib: todayItem.maghrib,
+              isya: todayItem.isya,
+            },
+            kabkota,
+            notificationSettings
+          );
+        }
       } else {
         set({ isLoading: false, error: 'Gagal memuat jadwal shalat' });
       }

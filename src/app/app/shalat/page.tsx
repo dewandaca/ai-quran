@@ -17,6 +17,9 @@ import {
   Sparkles,
   BookOpen,
   Compass,
+  BellRing,
+  AlertTriangle,
+  Volume2,
 } from 'lucide-react';
 import MobileFrame from '@/components/layout/MobileFrame';
 import CityPickerModal from '@/components/home/CityPickerModal';
@@ -45,17 +48,30 @@ export default function ShalatPage() {
     monthlySchedule,
     nextPrayer,
     notificationSettings,
+    permissionStatus,
     isLoading,
     isDetectingLocation,
     loadSchedule,
     detectLocation,
     setCity,
     toggleNotification,
+    requestPermission,
+    testNotification,
     updateNextPrayer,
   } = useShalatStore();
 
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [copiedDoa, setCopiedDoa] = useState(false);
+  const [testingNotif, setTestingNotif] = useState(false);
+  const [notifBannerDismissed, setNotifBannerDismissed] = useState(false);
+
+  const handleTestNotification = async () => {
+    setTestingNotif(true);
+    await testNotification();
+    setTimeout(() => {
+      setTestingNotif(false);
+    }, 2500);
+  };
 
   useEffect(() => {
     loadSchedule();
@@ -172,6 +188,80 @@ export default function ShalatPage() {
           </button>
         </div>
       </div>
+
+      {/* Notification Permission & Testing Banner */}
+      {!notifBannerDismissed && permissionStatus !== 'granted' && permissionStatus !== 'unsupported' && (
+        <div className={`mb-6 p-4 rounded-3xl border transition shadow-xs ${
+          permissionStatus === 'denied'
+            ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+            : 'bg-emerald-50/90 border-[#1B4931]/20 text-[#1B4931]'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                permissionStatus === 'denied'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-[#1B4931]/10 text-[#1B4931]'
+              }`}>
+                {permissionStatus === 'denied' ? <AlertTriangle size={20} /> : <BellRing size={20} />}
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold">
+                  {permissionStatus === 'denied'
+                    ? 'Izin Notifikasi Diblokir oleh Browser'
+                    : 'Aktifkan Notifikasi & Suara Adzan'}
+                </h4>
+                <p className="text-[11px] opacity-80 mt-0.5 leading-relaxed">
+                  {permissionStatus === 'denied'
+                    ? 'Agar pengingat shalat muncul, buka ikon gembok/setelan browser di samping URL dan ubah Notifikasi menjadi Izinkan (Allow).'
+                    : 'Dapatkan pengingat otomatis tepat waktu saat masuk jadwal shalat, meskipun web diminimalkan atau di latar belakang.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              {permissionStatus !== 'denied' && (
+                <button
+                  onClick={() => requestPermission()}
+                  className="px-4 py-2 rounded-xl bg-[#1B4931] hover:bg-[#143828] text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95"
+                >
+                  Izinkan Sekarang
+                </button>
+              )}
+              <button
+                onClick={() => setNotifBannerDismissed(true)}
+                className="px-2.5 py-2 rounded-xl text-xs font-medium opacity-60 hover:opacity-100 cursor-pointer transition"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Test Bar if permission is granted */}
+      {permissionStatus === 'granted' && (
+        <div className="mb-6 px-4 py-2.5 rounded-2xl bg-white/70 border border-[#E8DECD] shadow-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-semibold text-[#1B4931]">
+              Notifikasi Aktif
+            </span>
+            <span className="text-[11px] text-[#6B6258] hidden sm:inline">
+              (Pengingat sholat &amp; suara adzan siap)
+            </span>
+          </div>
+          <button
+            onClick={handleTestNotification}
+            disabled={testingNotif}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FAF6EE] hover:bg-[#FAF6EE]/80 text-[#1B4931] border border-[#E8DECD] text-xs font-bold cursor-pointer transition active:scale-95"
+            title="Kirim notifikasi uji coba ke browser ini"
+          >
+            <Volume2 size={13} className="text-[#C5A059]" />
+            <span>{testingNotif ? 'Mengirim Uji Coba...' : 'Uji Coba Notifikasi'}</span>
+          </button>
+        </div>
+      )}
 
       {/* BENTO GRID LAYOUT */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">

@@ -42,13 +42,23 @@ export default function MobileFrame({
   const { currentTrack, isPlaying, setPlayerModalOpen } = useAudioStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Load stores from localStorage on mount & register Service Worker
+  // Load stores from localStorage on mount, load prayer schedule & register Service Worker
   useEffect(() => {
     useSettingsStore.getState().loadFromStorage();
-    useShalatStore.getState().loadFromStorage();
+    const shalatStore = useShalatStore.getState();
+    shalatStore.loadFromStorage();
+    shalatStore.loadSchedule();
+
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+
+    // Global prayer time watcher across all app pages (checks every 10 seconds)
+    const interval = setInterval(() => {
+      useShalatStore.getState().updateNextPrayer();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Spacebar keyboard listener for laptop/desktop play/pause
