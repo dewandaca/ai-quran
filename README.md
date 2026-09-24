@@ -1,22 +1,23 @@
 # 📖 Al-Qur'an Companion (AI Quran Web)
 
-Aplikasi Al-Qur'an digital modern, elegan, dan komprehensif yang dilengkapi dengan **Tafsir Kemenag**, **Audio Murottal 6 Qari**, **Jadwal Shalat 517 Kota & Notifikasi Adzan Otomatis**, serta asisten pintar **AI Ustadz (RAG Vector Search)** untuk konsultasi keislaman.
+Aplikasi Al-Qur'an digital modern, elegan, dan komprehensif yang dibangun dengan **Next.js 16**, **Tailwind CSS v4**, dan **Zustand**. Dilengkapi dengan **Tafsir Resmi Kemenag RI**, **Audio Murottal 6 Qari**, **Jadwal Shalat 517 Kota & Notifikasi Adzan Otomatis**, dukungan **PWA (Progressive Web App)**, serta asisten pintar **AI Ustadz (RAG Vector Search)** untuk konsultasi keislaman.
 
 ---
 
 ## ✨ Fitur Utama
 
 ### 1. 📜 Al-Qur'an Digital 114 Surah (30 Juz)
-* **Teks Arab Berharakat** yang jelas dan nyaman dibaca (LPMQ font standard).
+* **Teks Arab Berharakat** yang jelas dan nyaman dibaca dengan standar font mushaf Kemenag/LPMQ.
 * **Transliterasi Latin & Terjemahan** Bahasa Indonesia resmi Kementerian Agama RI.
-* **Navigasi Cepat:** Pencarian surah, filter Makkiyyah/Madaniyyah, lompat nomor ayat, dan penanda terakhir dibaca.
+* **Fitur Pencarian Cerdas:** Cari surah berdasarkan nama, arti, atau nomor urut surah.
+* **Navigasi Cepat:** Filter Makkiyyah/Madaniyyah, lompat nomor ayat, dan penanda ayat terakhir dibaca (*Last Read*).
 
 ### 2. 📚 Tafsir Lengkap Kemenag RI
 * Tafsir ringkas (Wajiz) dan tafsir tahlili (mendalam) per surah dan per ayat.
-* Asbabun nuzul dan latar belakang penurunan surah.
+* Asbabun nuzul dan konteks historis penurunan surah.
 
 ### 3. 🎙️ Audio Murottal & Vinyl Player
-* Pemutar audio murottal berkualitas tinggi per ayat atau per surah.
+* Pemutar audio murottal berkualitas tinggi per ayat atau putar surah secara berkesinambungan (*continuous play*).
 * **6 Pilihan Qari Internasional:**
   * Misyari Rasyid Al-Afasy
   * Abdurrahman As-Sudais
@@ -24,39 +25,48 @@ Aplikasi Al-Qur'an digital modern, elegan, dan komprehensif yang dilengkapi deng
   * Abdul Muhsin Al-Qasim
   * Ibrahim Al-Dossari
   * Yasser Al-Dosari
-* **Floating Vinyl Player:** Pemutar audio mengambang dengan animasi piringan hitam (*vinyl*), kendali putar otomatis (*continuous play*), dan mode repeat.
+* **Floating Vinyl Player:** Pemutar audio mengambang dengan animasi piringan hitam (*vinyl*), shortcut keyboard (spasi untuk Play/Pause), dan kendali penuh dari halaman mana saja.
 
-### 4. 🕌 Jadwal Shalat & Notifikasi Adzan Otomatis
-* Jadwal shalat akurat untuk **517 Kota/Kabupaten di 34 Provinsi** se-Indonesia (Kemenag RI).
-* **Deteksi Lokasi Otomatis (GPS & Reverse Geocoding)** atau pencarian kota manual.
-* **Notifikasi Pengingat Adzan Otomatis:**
-  * Pengecekan otomatis di latar belakang saat waktu shalat tiba (Subuh, Dzuhur, Ashar, Maghrib, Isya).
-  * Pesan notifikasi dinamis menyebutkan **waktu shalat** dan **wilayah/daerah** terkait.
-  * Disertai nada pengingat (*Islamic chime*) berbasis Web Audio API.
-  * Didukung oleh **Service Worker (`public/sw.js`)** sehingga notifikasi dapat tampil di HP Android, iOS (PWA), dan browser desktop.
-* Teks lengkap **Doa Setelah Mendengar Adzan** (Arab, Latin, Terjemahan HR. Al-Bukhari) dengan tombol salin cepat.
+### 4. 🕌 Jadwal Shalat, PWA & Sistem Notifikasi Adzan
+* **Jadwal Shalat Akurat 517 Kota/Kabupaten** di 34 Provinsi seluruh Indonesia (Kemenag RI).
+* **Deteksi Lokasi GPS Otomatis:** Pencocokan cerdas dengan penanganan toleransi kota untuk mencegah galat.
+* **Sistem Notifikasi Adzan Mutakhir:**
+  * **Global Background Watcher:** Pemantau waktu sholat aktif di setiap halaman aplikasi via `MobileFrame`.
+  * **Toleransi Waktu (Grace Window):** Pengecekan cerdas yang mencegah notifikasi terlewat akibat *throttling* atau *sleep mode* browser.
+  * **Pemberitahuan Personal:** Menampilkan nama waktu sholat (Subuh, Dzuhur, Ashar, Maghrib, Isya) dan nama kota Anda.
+  * **Audio Chime:** Nada pengingat ganda (*harmonic chime*) berbasis Web Audio API tanpa perlu aset audio eksternal.
+  * **Uji Coba Notifikasi (Test Notification):** Tombol tes langsung di halaman Shalat dan Pengaturan untuk menguji suara dan *popup* notifikasi.
+  * **Pengaturan Fleksibel:** Toggle notifikasi per waktu sholat tersimpan permanen di `localStorage`.
+  * **Dukungan Latar Belakang & PWA:** Terintegrasi dengan Service Worker (`public/sw.js`) dan *Periodic Background Sync* untuk perangkat Android/Chromium.
+* Teks lengkap **Doa Setelah Mendengar Adzan** (Arab, Latin, dan Terjemahan HR. Al-Bukhari no. 614) dengan tombol salin instan.
 
-### 5. 🤖 AI Ustadz (EQuran AI - RAG Vector Search)
-* Asisten cerdas untuk bertanya seputar Al-Qur'an, tafsir, ibadah, hukum fiqih, dan adab keseharian.
-* **Teknologi RAG (Retrieval-Augmented Generation):**
-  * Pencarian vektor semantik (1536-dim via Gemini Embedding / Supabase pgvector) pada 6.236 ayat Al-Qur'an dan ~227 Doa Harian.
-  * Menghasilkan jawaban yang berlandaskan rujukan ayat dan hadits/doa yang dapat langsung dibaca dan disalin.
+### 5. 🤖 AI Ustadz (RAG Vector Search Keislaman)
+* Asisten cerdas untuk bertanya seputar Al-Qur'an, fiqih, tafsir, ibadah, dan adab harian.
+* **Arsitektur RAG (Retrieval-Augmented Generation):**
+  * Pencarian semantik berdasar vektor (Supabase `pgvector` & Google Gemini).
+  * Menghubungkan 6.236 ayat Al-Qur'an dan kumpulan Doa Harian terindeks.
+  * Jawaban berlandaskan rujukan ayat dan hadits dengan kartu sitasi yang dapat langsung dibuka.
 
 ### 6. 🔖 Bookmark & Riwayat Bacaan
 * Simpan ayat-ayat favorit ke daftar bookmark pribadi.
-* Akses cepat ayat yang disimpan kapan saja secara offline di browser.
+* Penyimpanan lokal yang cepat, aman, dan dapat diakses secara offline.
+
+### 7. ⚙️ Pengaturan & Kustomisasi Tampilan
+* Pengaturan ukuran font kaligrafi Arab dan teks terjemahan secara dinamis.
+* Toggle tampilan latin (transliterasi) dan terjemahan.
+* Pengaturan notifikasi per waktu sholat dan pilihan qari default.
 
 ---
 
 ## 🛠️ Teknologi yang Digunakan
 
-* **Framework:** [Next.js](https://nextjs.org/) 16 (App Router & Turbopack)
-* **Library UI:** [React](https://react.dev/) 19, [Tailwind CSS](https://tailwindcss.com/) v4
+* **Framework:** [Next.js](https://nextjs.org/) 16 (App Router)
+* **Library UI:** [React](https://react.dev/) 19 & [Tailwind CSS](https://tailwindcss.com/) v4
 * **State Management:** [Zustand](https://github.com/pmndrs/zustand)
 * **Database & Vektor:** [Supabase](https://supabase.com/) (`pgvector`, PostgreSQL)
-* **AI & Embeddings:** [Google Gemini API](https://ai.google.dev/) (`gemini-embedding-001`, Gemini 2.5 Flash / Pro) & OpenAI Fallback
-* **Icons:** [Lucide React](https://lucide.dev/)
-* **PWA & Notifications:** Web Notification API + Service Worker
+* **Model AI & LLM:** [Google Gemini API](https://ai.google.dev/) & Groq / OpenAI
+* **Ikon:** [Lucide React](https://lucide.dev/)
+* **PWA & Notifikasi:** Service Worker (`sw.js`), Web App Manifest, dan Web Audio API
 
 ---
 
@@ -74,16 +84,22 @@ npm install
 ```
 
 ### 3. Konfigurasi Environment Variables
-Buat file `.env.local` di direktori root proyek dan masukkan kredensial berikut:
+Buat file `.env.local` di direktori root proyek dan masukkan konfigurasi berikut:
 
 ```env
-# Supabase Configuration (untuk AI Ustadz RAG Vector Search)
+# Supabase (RAG Vector Search & Embeddings)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
-# AI Embeddings & LLM
-GEMINI_API_KEY=your-google-gemini-api-key
-OPENAI_API_KEY=your-openai-api-key # (Opsional fallback)
+# Google Gemini API (LLM & Embeddings)
+GEMINI_API_KEY=your-gemini-api-key
+NEXT_PUBLIC_GEMINI_API_KEY=your-gemini-api-key
+
+# Opsional: OpenAI / Groq Fallback
+OPENAI_API_KEY=your-openai-api-key
+NEXT_PUBLIC_OPENAI_API_KEY=your-openai-api-key
+GROQ_API_KEY=your-groq-api-key
+NEXT_PUBLIC_GROQ_API_KEY=your-groq-api-key
 ```
 
 ### 4. Jalankan Server Development
@@ -91,19 +107,19 @@ OPENAI_API_KEY=your-openai-api-key # (Opsional fallback)
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000) di browser Anda untuk melihat hasilnya.
+Buka [http://localhost:3000](http://localhost:3000) di browser Anda.
 
 ---
 
 ## 📦 Skrip yang Tersedia
 
-| Skrip | Deskripsi |
+| Perintah | Deskripsi |
 |---|---|
 | `npm run dev` | Menjalankan local development server Next.js |
-| `npm run build` | Melakukan kompilasi produksi dan pengecekan tipe TypeScript |
-| `npm run start` | Menjalankan server Next.js hasil build produksi |
-| `npm run lint` | Menjalankan linter ESLint |
-| `npm run seed:duas` | Script untuk mengindeks dan mengisi data embedding doa ke Supabase |
+| `npm run build` | Melakukan build produksi dan kompilasi TypeScript |
+| `npm run start` | Menjalankan aplikasi dari hasil build produksi |
+| `npm run lint` | Menjalankan pengecekan kualitas kode dengan ESLint |
+| `npm run seed:duas` | Mengindeks dan memasukkan koleksi doa harian ke database vektor Supabase |
 
 ---
 
@@ -112,27 +128,29 @@ Buka [http://localhost:3000](http://localhost:3000) di browser Anda untuk meliha
 ```text
 ai-quran-web/
 ├── public/                     # Aset publik statis
-│   ├── sw.js                   # Service Worker (PWA & Notifikasi HP)
-│   ├── favicon.png             # Favicon
-│   └── icon.png                # Ikon aplikasi
+│   ├── sw.js                   # Service Worker (PWA, Push & Background Sync)
+│   ├── favicon.png             # Favicon aplikasi
+│   ├── icon.png                # Ikon aplikasi & badge notifikasi
+│   └── fonts/                  # Font kaligrafi lokal
 ├── src/
 │   ├── app/                    # Next.js App Router
-│   │   ├── api/ai/route.ts     # Endpoint RAG Vector Search & AI Chat
-│   │   ├── app/                # Halaman aplikasi utama
-│   │   │   ├── page.tsx        # Beranda (Hero Jadwal Shalat, Quick Menu)
+│   │   ├── api/ai/route.ts     # Endpoint AI Ustadz RAG Vector Search
+│   │   ├── app/                # Halaman utama aplikasi
+│   │   │   ├── page.tsx        # Beranda (Countdown Shalat, Menu Cepat, Ayat Harian)
 │   │   │   ├── quran/          # Daftar 114 Surah Al-Qur'an
-│   │   │   ├── surah/[id]/     # Tampilan Bacaan & Tafsir Surah
-│   │   │   ├── shalat/         # Jadwal Shalat 517 Kota & Waktu Imsakiyah
-│   │   │   ├── ai-chat/        # AI Ustadz Chatbot Interface
+│   │   │   ├── surah/[id]/     # Bacaan Ayat, Murottal & Tafsir
+│   │   │   ├── shalat/         # Jadwal Shalat, Banner Izin & Uji Notifikasi
+│   │   │   ├── ai-chat/        # Antarmuka AI Ustadz Chatbot
 │   │   │   ├── bookmarks/      # Halaman Ayat Tersimpan
-│   │   │   └── settings/       # Pengaturan Tampilan & Audio
+│   │   │   └── settings/       # Pengaturan Font, Audio Qari & Notifikasi
+│   │   ├── manifest.ts         # Web App Manifest (PWA)
 │   │   └── layout.tsx          # Root Layout
 │   ├── components/             # Komponen UI modular
-│   │   ├── audio/              # Floating Vinyl Player & Controls
+│   │   ├── audio/              # Floating Vinyl Player & Full Modal Player
 │   │   ├── home/               # PrayerHeroCard, QuickMenuGrid, CityPickerModal
-│   │   ├── layout/             # MobileFrame, BottomNav
-│   │   └── quran/              # SurahCard, VerseCard, TafsirModal
-│   ├── services/               # API clients (quranApi, shalatApi, supabase)
+│   │   ├── layout/             # MobileFrame (Global Shell & Prayer Watcher)
+│   │   └── quran/              # AyahRow, SurahCard, TafsirModal
+│   ├── services/               # Integrasi API (quranApi, shalatApi, groundingService)
 │   ├── stores/                 # State management Zustand (audio, shalat, settings, chat)
 │   └── utils/                  # Utilitas (prayerNotification, audio chimes, helpers)
 ├── package.json
@@ -144,11 +162,11 @@ ai-quran-web/
 ## 📜 Sumber Data & Penghargaan
 
 * **Data Al-Qur'an, Tafsir & Jadwal Shalat:** [EQuran.id API](https://equran.id/)
-* **Standar Teks & Terjemahan:** Kementerian Agama Republik Indonesia (Kemenag RI)
-* **Audio Murottal:** EveryAyah / EQuran.id Audio Network
+* **Standar Mushaf & Terjemahan:** Kementerian Agama Republik Indonesia (Kemenag RI)
+* **Audio Murottal:** EveryAyah Network & EQuran.id Audio CDN
 
 ---
 
 ## 📄 Lisensi
 
-Proyek ini dibuat untuk kemaslahatan bersama. Silakan digunakan dan dikembangkan untuk kebaikan umat.
+Proyek ini bersifat sumber terbuka (*open source*) untuk kemaslahatan bersama. Silakan digunakan dan dikembangkan untuk kebaikan umat.
