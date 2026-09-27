@@ -465,7 +465,7 @@ export default function ChatBubble({
               </span>
               {engine === 'vector' ? (
                 <span className="text-[10px] text-emerald-800 bg-emerald-100/80 border border-emerald-300/70 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                  <span>⚡ Vector Search</span>
+                  <span>⚡ EQuran Vector + GPT OSS</span>
                 </span>
               ) : (
                 <span className="text-[10px] text-[#8C6D2B] bg-[#C5A059]/15 border border-[#C5A059]/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">

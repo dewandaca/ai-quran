@@ -371,7 +371,7 @@ export default function AIChatPage() {
           }`}
         >
           <Zap size={13} className={aiEngine === 'vector' ? 'fill-white' : 'text-emerald-600'} />
-          <span>EQuran Vector</span>
+          <span>EQuran Vector + GPT OSS</span>
           <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${aiEngine === 'vector' ? 'bg-white text-emerald-800' : 'bg-emerald-100 text-emerald-800'}`}>
             Bebas Limit
           </span>
@@ -426,7 +426,7 @@ export default function AIChatPage() {
         <div className="bg-white border border-[#E8DECD] rounded-2xl rounded-tl-xs p-4 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[11px] font-bold text-[#1B4931]">
-              EQuran AI Assistant {aiEngine === 'vector' ? '(EQuran Vector Search)' : '(Gemini AI)'}
+              EQuran AI Assistant {aiEngine === 'vector' ? '(EQuran Vector + GPT OSS)' : '(Gemini AI)'}
             </span>
             <span className="w-2 h-2 rounded-full bg-[#C5A059] animate-ping" />
           </div>
@@ -552,7 +552,7 @@ export default function AIChatPage() {
                   {aiEngine === 'vector' ? (
                     <>
                       <Zap size={13} className="text-emerald-600 fill-emerald-600 shrink-0" />
-                      <span className="font-bold">EQuran Vector</span>
+                      <span className="font-bold">EQuran Vector + GPT OSS</span>
                       <span className="hidden sm:inline text-[9px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
                         Bebas Limit
                       </span>
@@ -579,7 +579,7 @@ export default function AIChatPage() {
                         Pilih Mesin AI / Pencarian
                       </p>
                       <p className="text-[10px] text-[#8C8276]">
-                        Ganti ke EQuran Vector bila Gemini limit atau high demand.
+                        Ganti ke EQuran Vector + GPT OSS bila Gemini limit atau high demand.
                       </p>
                     </div>
 
@@ -634,7 +634,7 @@ export default function AIChatPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold text-emerald-950">
-                              EQuran Vector Search
+                              EQuran Vector + GPT OSS
                             </span>
                             <span className="text-[9px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
                               Bebas Limit
@@ -645,7 +645,7 @@ export default function AIChatPage() {
                           )}
                         </div>
                         <p className="text-[10px] text-emerald-700/80 leading-tight mt-0.5">
-                          Pencarian semantik langsung ke database EQuran.id. Sangat cepat, stabil &amp; tanpa batas kuota.
+                          Pencarian semantik shahih dari EQuran.id dipadukan rangkuman mudah dipahami dari GPT OSS 120B (Groq).
                         </p>
                       </div>
                     </button>
@@ -731,7 +731,7 @@ export default function AIChatPage() {
                   {aiEngine === 'vector' ? (
                     <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg flex items-center gap-1">
                       <Zap size={11} className="text-emerald-600 fill-emerald-600 shrink-0" />
-                      <span>Mode: <strong>EQuran Vector</strong> (Bebas Limit)</span>
+                      <span>Mode: <strong>EQuran Vector + GPT OSS</strong></span>
                     </span>
                   ) : (
                     <span className="text-[11px] font-medium text-[#6B6258] bg-[#EAE1D2]/60 border border-[#E8DECD] px-2 py-0.5 rounded-lg flex items-center gap-1">
@@ -747,7 +747,7 @@ export default function AIChatPage() {
                   className="text-[11px] font-bold text-[#1B4931] hover:text-[#C5A059] flex items-center gap-1 transition cursor-pointer"
                   title="Beralih engine"
                 >
-                  <span>Pindah ke {aiEngine === 'gemini' ? '⚡ EQuran Vector' : '✨ Gemini AI'}</span>
+                  <span>Pindah ke {aiEngine === 'gemini' ? '⚡ EQuran Vector + GPT OSS' : '✨ Gemini AI'}</span>
                 </button>
               </div>
 
@@ -763,7 +763,7 @@ export default function AIChatPage() {
                   type="text"
                   placeholder={
                     aiEngine === 'vector'
-                      ? 'Pencarian Semantik EQuran Vector (cth: sabar dan sholat, sedekah)...'
+                      ? 'Tanyakan sesuatu (EQuran Vector + GPT OSS 120B)...'
                       : 'Tanyakan sesuatu pada EQuran AI (cth: abbasa ayat 3)...'
                   }
                   value={input}

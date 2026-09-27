@@ -32,10 +32,10 @@ export const THINKING_STEPS = [
 ];
 
 export const THINKING_STEPS_VECTOR = [
-  'Menghubungkan ke EQuran Vector API...',
-  'Mencari kemiripan semantik ayat & tafsir...',
-  'Mengambil teks Arab, Latin, dan terjemahan...',
-  'Menyusun rujukan ayat & doa terpercaya...',
+  'Mencari rujukan semantik di EQuran Vector API...',
+  'Memvalidasi keaslian ayat & tafsir Kemenag RI...',
+  'Merangkum penjelasan bersama GPT OSS 120B...',
+  'Menyajikan jawaban yang jelas & mudah dipahami...',
 ];
 
 interface ChatStore {
