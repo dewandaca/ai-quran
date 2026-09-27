@@ -1,4 +1,5 @@
 import { AICitation, AIDuaCitation } from './aiService';
+import { resolveSurahNumber } from './groundingService';
 
 export interface EQuranVectorItem {
   tipe: 'ayat' | 'tafsir' | 'doa' | 'surat';
@@ -13,6 +14,17 @@ export interface EQuranVectorResult {
   duaCitations: AIDuaCitation[];
   engine: 'vector';
   isFallback?: boolean;
+}
+
+export interface ConsolidatedVerse {
+  surahNumber: number;
+  surahName: string;
+  surahArabic?: string;
+  ayahNumber: number;
+  arabicText: string;
+  transliteration: string;
+  translation: string;
+  tafsirText?: string;
 }
 
 // In-memory cache for surah data during requests
@@ -41,7 +53,7 @@ async function fetchSurahData(surahId: number): Promise<any | null> {
 
 async function generateGPTOSSSummary(
   query: string,
-  verses: { surahName: string; ayahNumber: number; translation: string; tafsirText?: string }[],
+  verses: ConsolidatedVerse[],
   duas: { judul: string; terjemahan: string }[]
 ): Promise<string | null> {
   const groqKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
@@ -49,8 +61,8 @@ async function generateGPTOSSSummary(
 
   try {
     const versesContext = verses.slice(0, 4).map((v) =>
-      `[QS. ${v.surahName}: ${v.ayahNumber}]: "${v.translation}"${v.tafsirText ? ` (Tafsir: ${v.tafsirText.slice(0, 250)}...)` : ''}`
-    ).join('\n');
+      `[QS. ${v.surahName}: ${v.ayahNumber}]:\nArab: ${v.arabicText}\nLatin: ${v.transliteration}\nArti: "${v.translation}"${v.tafsirText ? `\nTafsir: ${v.tafsirText.slice(0, 200)}...` : ''}`
+    ).join('\n\n');
 
     const duasContext = duas.slice(0, 2).map((d) =>
       `[Doa: ${d.judul}]: "${d.terjemahan}"`
@@ -77,7 +89,7 @@ async function generateGPTOSSSummary(
 PEDOMAN:
 1. DILARANG menggunakan salam ritual (seperti "Assalamu'alaikum" atau "Wa'alaikumussalam"), langsung masuk ke intisari penjelasan secara hangat dan bersahabat.
 2. Gunakan bahasa Indonesia yang santun, sederhana, dan mudah dimengerti orang awam (hindari istilah teologis yang rumit tanpa penjelasan mudah).
-3. Sebutkan rujukan ayat dalam format [QS. Nama-Surat: Nomor-Ayat] (contoh: [QS. Asy-Syura: 37]).
+3. Sebutkan rujukan ayat dalam format '• Ayat rujukan: [QS. Nama-Surat: Nomor-Ayat]' (contoh: '• Ayat rujukan: [QS. Ar-Ra'd: 28]') pada setiap poin hikmah/praktik yang relevan.
 4. Jelaskan hikmah aplikatif sehari-hari secara bertahap dan terstruktur dalam poin-poin yang jelas dan praktis.
 5. Berikan pesan penutup yang menenangkan hati.`,
           },
@@ -105,6 +117,126 @@ PEDOMAN:
     console.warn('Groq GPT OSS 120B summarization failed/timed out, continuing with direct EQuran Vector data:', err);
   }
   return null;
+}
+
+function normalizeCleanSurah(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[āáàâä]/g, 'a')
+    .replace(/[īíìîï]/g, 'i')
+    .replace(/[ūúùûü]/g, 'u')
+    .replace(/[\u2010-\u2015\u02B0-\u02FF\u2018\u2019'’`\-_.\s]/g, '')
+    .trim();
+}
+
+async function injectVersesIntoSummary(
+  summary: string,
+  versesList: ConsolidatedVerse[],
+  existingCitations: AICitation[]
+): Promise<{ text: string; updatedCitations: AICitation[]; injectedKeys: Set<string> }> {
+  const injectedKeys = new Set<string>();
+  const citationsMap = new Map<string, AICitation>();
+
+  for (const c of existingCitations) {
+    citationsMap.set(`${c.surahNumber}:${c.ayahNumber}`, c);
+  }
+
+  // Regex to match verse references:
+  // e.g. "• Ayat rujukan: [QS. Ar‑Raʿd: 28]" or "- Ayat rujukan: [QS. Ar-Ra'd: 28]" or "[QS. Ar-Ra'd: 28]"
+  const regex = /([^\n]*(?:ayat\s*rujukan|rujukan\s*ayat)?\s*[:\-•*]*\s*\[?QS\.?\s*([^:\]\n]+?)(?::|\s+ayat\s*)\s*(\d+)\]?[^\n]*)/gi;
+
+  const matches: { fullLine: string; surahRaw: string; ayahRaw: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(summary)) !== null) {
+    matches.push({
+      fullLine: m[1],
+      surahRaw: m[2],
+      ayahRaw: m[3],
+    });
+  }
+
+  let updatedSummary = summary;
+
+  for (const match of matches) {
+    const aNum = parseInt(match.ayahRaw.trim(), 10);
+    const sClean = normalizeCleanSurah(match.surahRaw);
+    if (!sClean || isNaN(aNum) || aNum <= 0) continue;
+
+    // 1. Find in current versesList
+    let verse = versesList.find(
+      (v) => (normalizeCleanSurah(v.surahName) === sClean || normalizeCleanSurah(v.surahName).includes(sClean) || sClean.includes(normalizeCleanSurah(v.surahName))) && v.ayahNumber === aNum
+    );
+
+    // 2. If not found in current list, try resolving surah number
+    if (!verse) {
+      const sNum = resolveSurahNumber(match.surahRaw.trim()) || resolveSurahNumber(sClean);
+      if (sNum && sNum >= 1 && sNum <= 114) {
+        verse = versesList.find((v) => v.surahNumber === sNum && v.ayahNumber === aNum);
+        if (!verse) {
+          try {
+            const surahData = await fetchSurahData(sNum);
+            if (surahData && surahData.ayat) {
+              const targetAyah = surahData.ayat.find((a: any) => a.nomorAyat === aNum);
+              if (targetAyah) {
+                verse = {
+                  surahNumber: sNum,
+                  surahName: surahData.namaLatin || `Surah ${sNum}`,
+                  surahArabic: surahData.nama || '',
+                  ayahNumber: aNum,
+                  arabicText: targetAyah.teksArab || '',
+                  transliteration: targetAyah.teksLatin || '',
+                  translation: targetAyah.teksIndonesia || '',
+                };
+                versesList.push(verse);
+              }
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch on-demand verse QS ${sNum}:${aNum}:`, err);
+          }
+        }
+      }
+    }
+
+    if (!verse || !verse.arabicText) continue;
+
+    const key = `${verse.surahNumber}:${verse.ayahNumber}`;
+    if (injectedKeys.has(key)) continue;
+
+    // Check if the lines immediately following this occurrence already contain Arabic text
+    const pos = updatedSummary.indexOf(match.fullLine);
+    if (pos !== -1) {
+      const snippetAfter = updatedSummary.slice(pos + match.fullLine.length, pos + match.fullLine.length + 300);
+      if (/[\u0600-\u06FF]/.test(snippetAfter)) {
+        injectedKeys.add(key);
+        continue;
+      }
+    }
+
+    injectedKeys.add(key);
+    let block = `${match.fullLine}\n\n${verse.arabicText}\n\n*${verse.transliteration}*\n\n**Artinya:**\n"${verse.translation}"`;
+    if (verse.tafsirText) {
+      block += `\n\n**Kandungan Tafsir:**\n[TAFSIR_START]\n${verse.tafsirText}\n[TAFSIR_END]`;
+    }
+
+    updatedSummary = updatedSummary.replace(match.fullLine, block);
+
+    if (!citationsMap.has(key)) {
+      citationsMap.set(key, {
+        surahNumber: verse.surahNumber,
+        ayahNumber: verse.ayahNumber,
+        surahName: verse.surahName,
+        arabicText: verse.arabicText,
+        translation: verse.translation,
+        tafsirText: verse.tafsirText,
+      });
+    }
+  }
+
+  return {
+    text: updatedSummary,
+    updatedCitations: Array.from(citationsMap.values()),
+    injectedKeys,
+  };
 }
 
 function handleConversationalQuery(query: string): string | null {
@@ -194,18 +326,6 @@ export async function processWithEQuranVector(
     const tafsirItems = rawHasil.filter((h) => h.tipe === 'tafsir');
     const doaItems = rawHasil.filter((h) => h.tipe === 'doa');
 
-    // Consolidate verses and their tafsir
-    interface ConsolidatedVerse {
-      surahNumber: number;
-      surahName: string;
-      surahArabic?: string;
-      ayahNumber: number;
-      arabicText: string;
-      transliteration: string;
-      translation: string;
-      tafsirText?: string;
-    }
-
     const verseMap = new Map<string, ConsolidatedVerse>();
 
     // 1. Process ayat items
@@ -257,17 +377,22 @@ export async function processWithEQuranVector(
     // Generate easy-to-understand explanation using GPT OSS 120B (Groq)
     const gptSummary = await generateGPTOSSSummary(
       query,
-      versesList.map((v) => ({
-        surahName: v.surahName,
-        ayahNumber: v.ayahNumber,
-        translation: v.translation,
-        tafsirText: v.tafsirText,
-      })),
+      versesList,
       doaItems.map((d) => ({
         judul: d.data?.judul || '',
         terjemahan: d.data?.terjemahan || '',
       }))
     );
+
+    // Initial Citations array
+    const baseCitations: AICitation[] = versesList.map((v) => ({
+      surahNumber: v.surahNumber,
+      ayahNumber: v.ayahNumber,
+      surahName: v.surahName,
+      arabicText: v.arabicText,
+      translation: v.translation,
+      tafsirText: v.tafsirText,
+    }));
 
     // Build Formatted Output Text
     const textSections: string[] = [];
@@ -275,20 +400,6 @@ export async function processWithEQuranVector(
     if (options.isFallback) {
       textSections.push(
         `> 💡 *Server Gemini AI saat ini mengalami lonjakan trafik/limit. Jawaban dialihkan secara otomatis ke **EQuran Vector + GPT OSS 120B** agar rujukan Al-Qur'an tetap akurat dan penjelasan mudah dipahami.*`
-      );
-    }
-
-    // 1. Bagian Rangkuman & Penjelasan Praktis (GPT OSS 120B)
-    if (gptSummary) {
-      textSections.push(
-        `Berdasarkan pencarian Al-Qur'an untuk topik **"${query}"**, berikut adalah penjelasan praktis serta rujukan ayat shahih yang bersumber dari mushaf resmi:`
-      );
-      textSections.push(gptSummary);
-      textSections.push(`---`);
-      textSections.push(`### 📜 Rujukan Shahih Ayat Al-Qur'an (EQuran Vector)`);
-    } else {
-      textSections.push(
-        `Berdasarkan pencarian semantik Al-Qur'an untuk topik **"${query}"**, berikut adalah rujukan ayat dan dalil shahih yang paling relevan:`
       );
     }
 
@@ -305,22 +416,47 @@ export async function processWithEQuranVector(
       }
     }
 
-    // Render Verses (100% authentic from EQuran Vector)
-    for (const v of versesList) {
-      let verseBlock = `### QS. ${v.surahName}: Ayat ${v.ayahNumber}\n\n`;
-      if (v.arabicText) {
-        verseBlock += `${v.arabicText}\n\n`;
+    let finalCitations = baseCitations;
+
+    // 1. Bagian Rangkuman & Penjelasan Praktis dengan Ayat Langsung Ditulis di Situ
+    if (gptSummary) {
+      const injected = await injectVersesIntoSummary(gptSummary, versesList, baseCitations);
+      finalCitations = injected.updatedCitations;
+
+      textSections.push(
+        `Berdasarkan pencarian Al-Qur'an untuk topik **"${query}"**, berikut adalah penjelasan praktis serta rujukan ayat shahih yang bersumber langsung dari mushaf resmi:`
+      );
+      textSections.push(injected.text);
+
+      // Sisa ayat yang belum terinjeksi di dalam poin-poin penjelasan
+      const remainingVerses = versesList.filter(
+        (v) => !injected.injectedKeys.has(`${v.surahNumber}:${v.ayahNumber}`)
+      );
+
+      if (remainingVerses.length > 0) {
+        textSections.push(`---`);
+        textSections.push(`### 📜 Rujukan Tambahan Ayat Al-Qur'an & Tafsir`);
+        for (const v of remainingVerses) {
+          let verseBlock = `#### QS. ${v.surahName}: Ayat ${v.ayahNumber}\n\n`;
+          if (v.arabicText) verseBlock += `${v.arabicText}\n\n`;
+          if (v.transliteration) verseBlock += `*${v.transliteration}*\n\n`;
+          if (v.translation) verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
+          if (v.tafsirText) verseBlock += `**Penjelasan & Kandungan Tafsir:**\n[TAFSIR_START]\n${v.tafsirText}\n[TAFSIR_END]`;
+          textSections.push(verseBlock.trim());
+        }
       }
-      if (v.transliteration) {
-        verseBlock += `*${v.transliteration}*\n\n`;
+    } else {
+      textSections.push(
+        `Berdasarkan pencarian semantik Al-Qur'an untuk topik **"${query}"**, berikut adalah rujukan ayat dan dalil shahih yang paling relevan:`
+      );
+      for (const v of versesList) {
+        let verseBlock = `### QS. ${v.surahName}: Ayat ${v.ayahNumber}\n\n`;
+        if (v.arabicText) verseBlock += `${v.arabicText}\n\n`;
+        if (v.transliteration) verseBlock += `*${v.transliteration}*\n\n`;
+        if (v.translation) verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
+        if (v.tafsirText) verseBlock += `**Penjelasan & Kandungan Tafsir:**\n[TAFSIR_START]\n${v.tafsirText}\n[TAFSIR_END]`;
+        textSections.push(verseBlock.trim());
       }
-      if (v.translation) {
-        verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
-      }
-      if (v.tafsirText) {
-        verseBlock += `**Penjelasan & Kandungan Tafsir:**\n[TAFSIR_START]\n${v.tafsirText}\n[TAFSIR_END]`;
-      }
-      textSections.push(verseBlock.trim());
     }
 
     // Render Duas
@@ -330,18 +466,10 @@ export async function processWithEQuranVector(
         const dd = d.data;
         if (dd) {
           let doaBlock = `#### Doa: ${dd.judul}\n`;
-          if (dd.grup) {
-            doaBlock += `*Kategori: ${dd.grup}*\n\n`;
-          }
-          if (dd.teks_arab) {
-            doaBlock += `${dd.teks_arab}\n\n`;
-          }
-          if (dd.teks_latin) {
-            doaBlock += `*${dd.teks_latin}*\n\n`;
-          }
-          if (dd.terjemahan) {
-            doaBlock += `**Artinya:**\n"${dd.terjemahan}"\n\n`;
-          }
+          if (dd.grup) doaBlock += `*Kategori: ${dd.grup}*\n\n`;
+          if (dd.teks_arab) doaBlock += `${dd.teks_arab}\n\n`;
+          if (dd.teks_latin) doaBlock += `*${dd.teks_latin}*\n\n`;
+          if (dd.terjemahan) doaBlock += `**Artinya:**\n"${dd.terjemahan}"\n\n`;
           if (dd.sumber || dd.catatan) {
             const src = dd.sumber || dd.catatan;
             doaBlock += `**Riwayat & Keterangan:**\n${src}`;
@@ -358,16 +486,6 @@ export async function processWithEQuranVector(
 
     const finalText = textSections.join('\n\n');
 
-    // Build Citations array for interactive cards at the bottom
-    const citations: AICitation[] = versesList.map((v) => ({
-      surahNumber: v.surahNumber,
-      ayahNumber: v.ayahNumber,
-      surahName: v.surahName,
-      arabicText: v.arabicText,
-      translation: v.translation,
-      tafsirText: v.tafsirText,
-    }));
-
     // Build Dua Citations array for interactive cards
     const duaCitations: AIDuaCitation[] = doaItems.map((d) => ({
       duaId: d.data.id_doa || 0,
@@ -381,7 +499,7 @@ export async function processWithEQuranVector(
 
     return {
       text: finalText,
-      citations,
+      citations: finalCitations,
       duaCitations,
       engine: 'vector',
       isFallback: options.isFallback,
