@@ -79,7 +79,7 @@ async function generateGPTOSSSummary(
         'Authorization': `Bearer ${groqKey}`,
         'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(9000), // 9 detik toleransi
+      signal: AbortSignal.timeout(15000), // 15 detik toleransi
       body: JSON.stringify({
         model: 'openai/gpt-oss-120b',
         messages: [
@@ -90,7 +90,7 @@ async function generateGPTOSSSummary(
 PEDOMAN UTAMA:
 1. DILARANG menggunakan salam ritual (seperti "Assalamu'alaikum" atau "Wa'alaikumussalam"), langsung masuk ke intisari penjelasan secara hangat dan bersahabat.
 2. DILARANG KERAS MENGGUNAKAN FORMAT TABEL MARKDOWN (jangan gunakan garis pipa '| ... |'). Gunakan selalu format daftar nomor (1., 2., 3.) atau bullet points yang bersih dan rapi.
-3. RANGKUM TAFSIR SENDIRI SECARA RINGKAS & JELAS: Jangan menyalin teks tafsir panjang yang rumit. Rangkum inti hikmah dan kandungan tafsir dari rujukan dengan kata-kata Anda sendiri secara padat (1-2 kalimat per poin) agar pembaca awam tidak pusing dan jawabannya tidak kepanjangan.
+3. BATASI MAKSIMAL 3 POIN: Cukup buat 2 sampai 3 poin hikmah/praktis yang paling penting. Rangkum inti hikmah dan kandungan tafsir dari rujukan dengan kata-kata Anda sendiri secara padat (1-2 kalimat per poin) agar pembaca awam tidak pusing dan jawabannya tidak kepanjangan.
 4. Sebutkan rujukan ayat dalam format '• Ayat rujukan: [QS. Nama-Surat: Nomor-Ayat]' (contoh: '• Ayat rujukan: [QS. Asy-Syura: 43]') pada setiap poin hikmah/praktik yang relevan. Sistem akan otomatis menyisipkan teks Arab, Latin, dan terjemahan resmi tepat di bawah baris tersebut.
 5. Berikan pesan penutup yang menenangkan hati secara singkat.`,
           },
@@ -100,18 +100,29 @@ PEDOMAN UTAMA:
           },
         ],
         temperature: 0.3,
-        max_tokens: 850,
+        max_tokens: 2048, // Ruang token yang cukup untuk reasoning tokens + output tuntas
       }),
     });
 
     if (response.ok) {
       const json = await response.json();
-      const summary = json.choices?.[0]?.message?.content;
+      const choice = json.choices?.[0];
+      let summary = choice?.message?.content;
       if (summary && summary.trim().length > 0) {
-        return summary
+        summary = summary
           .replace(/^(?:assalamu'?alaikum(?:\s+warahmatullahi(?:\s+wabarakaatuh)?)?|wa'?alaikumsalam[\w\s]*)[,.:!\-\s]*/i, '')
           .replace(/(\r?\n\s*[-*_]{3,}\s*)+$/g, '')
           .trim();
+
+        // Jika terpotong di akhir kalimat (misal finish_reason === 'length'), rapikan kalimat yang menggantung
+        if (choice?.finish_reason === 'length') {
+          const lastPeriod = Math.max(summary.lastIndexOf('.'), summary.lastIndexOf('!'), summary.lastIndexOf('?'), summary.lastIndexOf('\n'));
+          if (lastPeriod > summary.length * 0.5) {
+            summary = summary.slice(0, lastPeriod + 1).trim();
+          }
+        }
+
+        return summary;
       }
     }
   } catch (err) {
@@ -504,6 +515,18 @@ export async function processWithEQuranVector(
         `Berdasarkan pencarian Al-Qur'an untuk topik **"${query}"**, berikut adalah penjelasan praktis serta rujukan ayat shahih yang bersumber langsung dari mushaf resmi:`
       );
       textSections.push(injected.text);
+
+      // Jaminan keselamatan: Jika AI tidak menyebut rujukan ayat sama sekali di teks, tampilkan ayat rujukan di bawahnya
+      if (injected.injectedKeys.size === 0 && versesList.length > 0) {
+        textSections.push(`---`);
+        for (const v of versesList.slice(0, 3)) {
+          let verseBlock = `### QS. ${v.surahName}: Ayat ${v.ayahNumber}\n\n`;
+          if (v.arabicText) verseBlock += `${v.arabicText}\n\n`;
+          if (v.transliteration) verseBlock += `*${v.transliteration}*\n\n`;
+          if (v.translation) verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
+          textSections.push(verseBlock.trim());
+        }
+      }
     } else {
       textSections.push(
         `Berdasarkan pencarian semantik Al-Qur'an untuk topik **"${query}"**, berikut adalah rujukan ayat dan dalil shahih yang paling relevan:`
