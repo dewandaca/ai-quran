@@ -361,14 +361,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       clearInterval(thinkingInterval);
 
+      const finalEngine = result.engine || currentEngine;
+
       get().updateMessage(roomId, assistantMsgId, {
         content: result.text,
         isStreaming: false,
         citations: result.citations,
         duaCitations: result.duaCitations,
-        engine: result.engine || currentEngine,
+        engine: finalEngine,
         isFallback: result.isFallback,
       });
+
+      // Jika terjadi auto fallback ke Vector, otomatis alihkan pilihan engine pengguna ke Vector
+      if (result.isFallback && finalEngine === 'vector') {
+        get().setAiEngine('vector');
+      }
 
       set({
         isGenerating: false,

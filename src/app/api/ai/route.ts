@@ -151,8 +151,10 @@ function cleanAssistantReply(text: string): string {
 
 
 export async function POST(req: NextRequest) {
+  let userQuery = '';
   try {
     const { message, conversationHistory = [], engine = 'gemini' } = await req.json();
+    userQuery = (typeof message === 'string') ? message : '';
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -410,22 +412,23 @@ export async function POST(req: NextRequest) {
 
     const historySlice = conversationHistory.slice(-10);
     for (const msg of historySlice) {
-      if (msg.role === 'user') {
+      if (msg.role === 'user' && msg.content?.trim()) {
         geminiContents.push({ role: 'user', parts: [{ text: msg.content }] });
-      } else if (msg.role === 'assistant') {
+      } else if (msg.role === 'assistant' && msg.content?.trim()) {
         geminiContents.push({ role: 'model', parts: [{ text: msg.content }] });
       }
     }
 
     geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-    const geminiModels =
-      [
-        'gemini-2.5-flash',
-        'gemini-3.6-flash',
-        'gemini-3.7-flash',
-        'gemini-3.8-flash',
-      ];
+    // Daftar model Gemini aktif (diurutkan dari yang tercepat dan paling stabil)
+    const geminiModels = [
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-2.0-flash',
+    ];
+
     for (const model of geminiModels) {
       try {
         const response = await fetch(
@@ -433,7 +436,7 @@ export async function POST(req: NextRequest) {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(60000), // Toleransi hingga 1 menit jika koneksi lag
+            signal: AbortSignal.timeout(8000), // Timeout 8 detik agar responsif dan tidak melebihi limit serverless
             body: JSON.stringify({
               contents: geminiContents,
               generationConfig: {
@@ -466,19 +469,28 @@ export async function POST(req: NextRequest) {
           }
         } else {
           const errText = await response.text();
-          console.error(`Gemini (${model}) HTTP ${response.status}:`, errText);
+          console.error(`Gemini (${model}) HTTP ${response.status}:`, errText.slice(0, 200));
         }
       } catch (geminiErr) {
         console.error(`Gemini (${model}) error or timeout:`, geminiErr);
       }
     }
 
-    // Jika seluruh model Gemini limit / high demand, alihkan otomatis ke EQuran Vector Search
+    // Jika seluruh model Gemini limit / high demand / timeout, alihkan otomatis ke EQuran Vector Search
     console.warn('Seluruh model Gemini sibuk / rate-limited. Mengalihkan otomatis ke EQuran Vector Search...');
     const fallbackVector = await processWithEQuranVector(message, { isFallback: true });
     return NextResponse.json(fallbackVector);
   } catch (error) {
     console.error('API /api/ai error:', error);
+    if (userQuery) {
+      try {
+        console.warn('Fallback darurat ke EQuran Vector Search karena error internal...');
+        const emergencyFallback = await processWithEQuranVector(userQuery, { isFallback: true });
+        return NextResponse.json(emergencyFallback);
+      } catch (fbErr) {
+        console.error('Fallback darurat EQuran Vector juga gagal:', fbErr);
+      }
+    }
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
