@@ -61,7 +61,7 @@ async function generateGPTOSSSummary(
 
   try {
     const versesContext = verses.slice(0, 4).map((v) =>
-      `[QS. ${v.surahName}: ${v.ayahNumber}]:\nArab: ${v.arabicText}\nLatin: ${v.transliteration}\nArti: "${v.translation}"${v.tafsirText ? `\nTafsir: ${v.tafsirText.slice(0, 200)}...` : ''}`
+      `[QS. ${v.surahName}: ${v.ayahNumber}]:\nArab: ${v.arabicText}\nLatin: ${v.transliteration}\nArti: "${v.translation}"${v.tafsirText ? `\nTafsir Rujukan: ${v.tafsirText.slice(0, 350)}...` : ''}`
     ).join('\n\n');
 
     const duasContext = duas.slice(0, 2).map((d) =>
@@ -69,7 +69,7 @@ async function generateGPTOSSSummary(
     ).join('\n');
 
     const promptContext = [
-      versesContext ? `Rujukan Ayat Al-Qur'an:\n${versesContext}` : '',
+      versesContext ? `Rujukan Ayat Al-Qur'an & Tafsir:\n${versesContext}` : '',
       duasContext ? `Rujukan Doa Terkait:\n${duasContext}` : '',
     ].filter(Boolean).join('\n\n');
 
@@ -85,21 +85,22 @@ async function generateGPTOSSSummary(
         messages: [
           {
             role: 'system',
-            content: `Anda adalah konsultan Islami terpercaya dari EQuran AI. Tugas Anda memberikan penjelasan, intisari, dan panduan praktis yang RAMAH, SEJUK, MENGALIR, dan SANGAT MUDAH DIPAHAMI ORANG AWAM berdasarkan rujukan ayat Al-Qur'an dan doa yang disediakan.
-PEDOMAN:
+            content: `Anda adalah konsultan Islami terpercaya dari EQuran AI. Tugas Anda memberikan penjelasan, intisari, dan panduan praktis yang RAMAH, SEJUK, MENGALIR, RINGKAS, dan SANGAT MUDAH DIPAHAMI ORANG AWAM berdasarkan rujukan ayat Al-Qur'an dan tafsir yang disediakan.
+
+PEDOMAN UTAMA:
 1. DILARANG menggunakan salam ritual (seperti "Assalamu'alaikum" atau "Wa'alaikumussalam"), langsung masuk ke intisari penjelasan secara hangat dan bersahabat.
-2. Gunakan bahasa Indonesia yang santun, sederhana, dan mudah dimengerti orang awam (hindari istilah teologis yang rumit tanpa penjelasan mudah).
-3. Sebutkan rujukan ayat dalam format '• Ayat rujukan: [QS. Nama-Surat: Nomor-Ayat]' (contoh: '• Ayat rujukan: [QS. Ar-Ra'd: 28]') pada setiap poin hikmah/praktik yang relevan.
-4. Jelaskan hikmah aplikatif sehari-hari secara bertahap dan terstruktur dalam poin-poin yang jelas dan praktis.
-5. Berikan pesan penutup yang menenangkan hati.`,
+2. DILARANG KERAS MENGGUNAKAN FORMAT TABEL MARKDOWN (jangan gunakan garis pipa '| ... |'). Gunakan selalu format daftar nomor (1., 2., 3.) atau bullet points yang bersih dan rapi.
+3. RANGKUM TAFSIR SENDIRI SECARA RINGKAS & JELAS: Jangan menyalin teks tafsir panjang yang rumit. Rangkum inti hikmah dan kandungan tafsir dari rujukan dengan kata-kata Anda sendiri secara padat (1-2 kalimat per poin) agar pembaca awam tidak pusing dan jawabannya tidak kepanjangan.
+4. Sebutkan rujukan ayat dalam format '• Ayat rujukan: [QS. Nama-Surat: Nomor-Ayat]' (contoh: '• Ayat rujukan: [QS. Asy-Syura: 43]') pada setiap poin hikmah/praktik yang relevan. Sistem akan otomatis menyisipkan teks Arab, Latin, dan terjemahan resmi tepat di bawah baris tersebut.
+5. Berikan pesan penutup yang menenangkan hati secara singkat.`,
           },
           {
             role: 'user',
-            content: `Pertanyaan Pengguna: "${query}"\n\nRujukan Shahih Al-Qur'an & Doa:\n${promptContext}\n\nTolong buatkan penjelasan ringkas dan hikmah praktis sehari-hari yang mudah dipahami orang awam berdasarkan rujukan di atas.`,
+            content: `Pertanyaan Pengguna: "${query}"\n\nRujukan Shahih Al-Qur'an & Kandungan Tafsir:\n${promptContext}\n\nTolong buatkan penjelasan ringkas dan hikmah praktis sehari-hari yang mudah dipahami orang awam berdasarkan rujukan di atas.`,
           },
         ],
         temperature: 0.3,
-        max_tokens: 900,
+        max_tokens: 850,
       }),
     });
 
@@ -129,6 +130,78 @@ function normalizeCleanSurah(name: string): string {
     .trim();
 }
 
+// Mengubah tabel markdown mentah menjadi daftar poin bersih agar tidak merusak tampilan chat
+function convertTablesToSections(text: string): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (line.startsWith('|') && (line.endsWith('|') || line.includes('|'))) {
+      // Baris pemisah tabel: |---|---|
+      if (/^\|[\s\-:|]+\|?$/.test(line)) {
+        continue;
+      }
+      const cells = line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim());
+
+      // Abaikan header tabel
+      if (cells.some((c) => /^(no|nomor|hikmah|rujukan|langkah|ayat|aspek|cara|praktik|poin|topik)\b/i.test(c))) {
+        continue;
+      }
+
+      let no = '';
+      let content = '';
+      let rujukan = '';
+
+      if (cells.length >= 3) {
+        no = cells[0];
+        content = cells[1];
+        rujukan = cells.slice(2).join(' • ');
+      } else if (cells.length === 2) {
+        if (/^\d+[\.\)]?$/.test(cells[0])) {
+          no = cells[0];
+          content = cells[1];
+        } else if (/\[?QS\./i.test(cells[1])) {
+          content = cells[0];
+          rujukan = cells[1];
+        } else {
+          content = `${cells[0]}: ${cells[1]}`;
+        }
+      } else {
+        content = cells[0] || '';
+      }
+
+      // Jika rujukan masih ada di dalam content, pisahkan
+      if (!rujukan) {
+        const match = content.match(/([•*\-]?\s*(?:ayat\s*rujukan|rujukan)?\s*[:\-]?\s*\[?QS\.[^\]\n]+\]?)/i);
+        if (match) {
+          rujukan = match[1];
+          content = content.replace(match[1], '').trim();
+        }
+      }
+
+      const cleanNo = no.replace(/[\.\)]+$/, '').trim();
+      const numPrefix = cleanNo && /^\d+$/.test(cleanNo) ? `${cleanNo}. ` : '- ';
+
+      let block = `\n${numPrefix}${content}`;
+      if (rujukan) {
+        block += `\n${rujukan}`;
+      }
+      result.push(block + '\n');
+    } else {
+      result.push(rawLine);
+    }
+  }
+
+  return result.join('\n');
+}
+
 async function injectVersesIntoSummary(
   summary: string,
   versesList: ConsolidatedVerse[],
@@ -141,13 +214,16 @@ async function injectVersesIntoSummary(
     citationsMap.set(`${c.surahNumber}:${c.ayahNumber}`, c);
   }
 
-  // Regex to match verse references:
-  // e.g. "• Ayat rujukan: [QS. Ar‑Raʿd: 28]" or "- Ayat rujukan: [QS. Ar-Ra'd: 28]" or "[QS. Ar-Ra'd: 28]"
+  // 1. Bersihkan tabel markdown terlebih dahulu agar tidak ada sintaks pipa '|' yang pecah
+  let updatedSummary = convertTablesToSections(summary);
+
+  // 2. Regex untuk mendeteksi penyebutan ayat:
+  // e.g. "• Ayat rujukan: [QS. Ar‑Raʿd: 28]" atau "- Ayat rujukan: [QS. Ar-Ra'd: 28]" atau "[QS. Asy-Syura: 43]"
   const regex = /([^\n]*(?:ayat\s*rujukan|rujukan\s*ayat)?\s*[:\-•*]*\s*\[?QS\.?\s*([^:\]\n]+?)(?::|\s+ayat\s*)\s*(\d+)\]?[^\n]*)/gi;
 
   const matches: { fullLine: string; surahRaw: string; ayahRaw: string }[] = [];
   let m: RegExpExecArray | null;
-  while ((m = regex.exec(summary)) !== null) {
+  while ((m = regex.exec(updatedSummary)) !== null) {
     matches.push({
       fullLine: m[1],
       surahRaw: m[2],
@@ -155,19 +231,17 @@ async function injectVersesIntoSummary(
     });
   }
 
-  let updatedSummary = summary;
-
   for (const match of matches) {
     const aNum = parseInt(match.ayahRaw.trim(), 10);
     const sClean = normalizeCleanSurah(match.surahRaw);
     if (!sClean || isNaN(aNum) || aNum <= 0) continue;
 
-    // 1. Find in current versesList
+    // 1. Cari di versesList saat ini
     let verse = versesList.find(
       (v) => (normalizeCleanSurah(v.surahName) === sClean || normalizeCleanSurah(v.surahName).includes(sClean) || sClean.includes(normalizeCleanSurah(v.surahName))) && v.ayahNumber === aNum
     );
 
-    // 2. If not found in current list, try resolving surah number
+    // 2. Jika tidak ada di daftar saat ini, resolve nomor surah dan ambil datanya
     if (!verse) {
       const sNum = resolveSurahNumber(match.surahRaw.trim()) || resolveSurahNumber(sClean);
       if (sNum && sNum >= 1 && sNum <= 114) {
@@ -202,7 +276,7 @@ async function injectVersesIntoSummary(
     const key = `${verse.surahNumber}:${verse.ayahNumber}`;
     if (injectedKeys.has(key)) continue;
 
-    // Check if the lines immediately following this occurrence already contain Arabic text
+    // Periksa jika baris sesudahnya sudah memuat teks Arab agar tidak dobel
     const pos = updatedSummary.indexOf(match.fullLine);
     if (pos !== -1) {
       const snippetAfter = updatedSummary.slice(pos + match.fullLine.length, pos + match.fullLine.length + 300);
@@ -213,10 +287,13 @@ async function injectVersesIntoSummary(
     }
 
     injectedKeys.add(key);
-    let block = `${match.fullLine}\n\n${verse.arabicText}\n\n*${verse.transliteration}*\n\n**Artinya:**\n"${verse.translation}"`;
-    if (verse.tafsirText) {
-      block += `\n\n**Kandungan Tafsir:**\n[TAFSIR_START]\n${verse.tafsirText}\n[TAFSIR_END]`;
-    }
+
+    // Bersihkan sisa karakter pipa tabel jika ada
+    const cleanLine = match.fullLine.replace(/^\|\s*/, '').replace(/\s*\|$/, '').trim();
+
+    // Tuliskan Teks Arab, Latin, dan Terjemahan Kemenag RI langsung di bawah baris rujukan
+    // (Tafsir lengkap ditiadakan dari teks agar ringkas & tidak pusing; tafsir dirangkum oleh GPT OSS)
+    const block = `${cleanLine}\n\n${verse.arabicText}\n\n*${verse.transliteration}*\n\n**Artinya:**\n"${verse.translation}"`;
 
     updatedSummary = updatedSummary.replace(match.fullLine, block);
 
@@ -384,7 +461,7 @@ export async function processWithEQuranVector(
       }))
     );
 
-    // Initial Citations array
+    // Initial Citations array (tetap menyimpan tafsirText agar dapat dilihat di mushaf bila user ingin)
     const baseCitations: AICitation[] = versesList.map((v) => ({
       surahNumber: v.surahNumber,
       ayahNumber: v.ayahNumber,
@@ -427,24 +504,6 @@ export async function processWithEQuranVector(
         `Berdasarkan pencarian Al-Qur'an untuk topik **"${query}"**, berikut adalah penjelasan praktis serta rujukan ayat shahih yang bersumber langsung dari mushaf resmi:`
       );
       textSections.push(injected.text);
-
-      // Sisa ayat yang belum terinjeksi di dalam poin-poin penjelasan
-      const remainingVerses = versesList.filter(
-        (v) => !injected.injectedKeys.has(`${v.surahNumber}:${v.ayahNumber}`)
-      );
-
-      if (remainingVerses.length > 0) {
-        textSections.push(`---`);
-        textSections.push(`### 📜 Rujukan Tambahan Ayat Al-Qur'an & Tafsir`);
-        for (const v of remainingVerses) {
-          let verseBlock = `#### QS. ${v.surahName}: Ayat ${v.ayahNumber}\n\n`;
-          if (v.arabicText) verseBlock += `${v.arabicText}\n\n`;
-          if (v.transliteration) verseBlock += `*${v.transliteration}*\n\n`;
-          if (v.translation) verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
-          if (v.tafsirText) verseBlock += `**Penjelasan & Kandungan Tafsir:**\n[TAFSIR_START]\n${v.tafsirText}\n[TAFSIR_END]`;
-          textSections.push(verseBlock.trim());
-        }
-      }
     } else {
       textSections.push(
         `Berdasarkan pencarian semantik Al-Qur'an untuk topik **"${query}"**, berikut adalah rujukan ayat dan dalil shahih yang paling relevan:`
@@ -454,7 +513,6 @@ export async function processWithEQuranVector(
         if (v.arabicText) verseBlock += `${v.arabicText}\n\n`;
         if (v.transliteration) verseBlock += `*${v.transliteration}*\n\n`;
         if (v.translation) verseBlock += `**Artinya:**\n"${v.translation}"\n\n`;
-        if (v.tafsirText) verseBlock += `**Penjelasan & Kandungan Tafsir:**\n[TAFSIR_START]\n${v.tafsirText}\n[TAFSIR_END]`;
         textSections.push(verseBlock.trim());
       }
     }
